@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="LTI" />
+  <meta name="theme-color" content="#060e22" />
+  <title>Lucas Trade Intel</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { background: #060e22; font-family: 'Trebuchet MS', sans-serif; overflow-x: hidden; }
+    input, textarea, button, select { font-family: inherit; }
+    ::-webkit-scrollbar { width: 4px; } 
+    ::-webkit-scrollbar-track { background: #060e22; }
+    ::-webkit-scrollbar-thumb { background: #c9a84c44; border-radius: 2px; }
+    input::placeholder, textarea::placeholder { color: #4a5a7a; }
+    textarea { resize: vertical; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useCallback } = React;
+
+    const WATCHLIST = {
+      "AI & Tech": ["NVDA","AMD","AAPL","MSFT","META","GOOGL","TSLA","TSM","SMCI","AMZN","ORCL","CRM","PLTR","ARM","AVGO","MRVL","INTC","QCOM"],
+      "Pure AI":   ["SOUN","BBAI","IONQ","RGTI","AI","HOOD"],
+      "Energy":    ["XOM","CVX","OXY","SLB","FSLR","NEE","HAL","MPC","VLO","DVN"],
+      "ETFs":      ["QQQ","SPY","XLE","SOXX","ARKK","BOTZ","AIQ","SMH","GLD","USO"]
+    };
+    const ALL_TICKERS = Object.values(WATCHLIST).flat();
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    function mockStockData(ticker) {
+      const seed = ticker.split("").reduce((a,c) => a + c.charCodeAt(0), 0);
+      const rng  = s => ((Math.sin(s) * 10000) % 1 + 1) / 2;
+      return {
+        ticker,
+        price:       20 + rng(seed) * 480,
+        change:      (rng(seed*2) - 0.45) * 8,
+        volume:      Math.floor(rng(seed*3) * 50000000 + 1000000),
+        momentum:    rng(seed*4) * 100,
+        iv:          20 + rng(seed*5) * 60,
+        ivRank:      rng(seed*6) * 100,
+        earningsDays:Math.floor(rng(seed*7) * 60)
+      };
+    }
+
+    function getSignal(d) {
+      if (d.momentum > 65 && d.change > 1)  return { label:"BULLISH", color:"#00d4aa", emoji:"▲" };
+      if (d.momentum < 35 && d.change < -1) return { label:"BEARISH", color:"#ff4d6d", emoji:"▼" };
+      return { label:"NEUTRAL", color:"#a0a0b0", emoji:"◆" };
+    }
+
+    function getIVLabel(rank) {
+      if (rank > 70) return { label:"IV HIGH — sell premium",  color:"#ff9f43" };
+      if (rank < 30) return { label:"IV LOW — buy options",    color:"#00d4aa" };
+      return          { label:"IV NORMAL",                      color:"#a0a0b0" };
+    }
+
+    // ── Claude API ───────────────────────────────────────────────────────────
+
+    async function analyzeWithClaude(prompt) {
+      try {
+        const res = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 1000,
+            system: `You are Lucas Trade Intel — a brutally honest options trading analyst.
+You focus on tech, AI, and energy stocks. Weekly/monthly options plays only.
+Disagree with the user if the data does not support their thesis.
+Respond ONLY with a JSON object — no markdown, no backticks, no preamble.
+Schema: { "verdict":"BULLISH|BEARISH|NEUTRAL", "confidence":0-10, "reasoning":"2-3 sentences", "suggestedPlay":"specific options strategy", "keyRisk":"one sentence", "agree":true/false }`,
+            messages: [{ role:"user", content: prompt }]
+          })
+        });
+        const data = await res.json();
+        const text = data.content?.find(b => b.type === "text")?.text || "{}";
+        return JSON.parse(text.replace(/```json|```/g,"").trim());
+      } catch(e) {
+        return { verdict:"ERROR", confidence:0, reasoning:"Could not reach analysis engine. Check your connection.", suggestedPlay:"N/A", keyRisk:"N/A", agree:false };
+      }
+    }
+
+    // ── Sub-components ───────────────────────────────────────────────────────
+
+    function Logo() {
+      return (
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <div style={{width:46,height:46,borderRadius:10,background:"linear-gradient(135deg,#c9a84c 0%,#f0d080 50%,#c9a84c 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 0 18px rgba(201,168,76,0.5)",flexShrink:0,position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",inset:0,background:"linear-gradient(135deg,transparent 40%,rgba(255,255,255,0.2) 60%,transparent 70%)"}}/>
+            <span style={{fontSize:22,fontWeight:900,color:"#0a1628",fontFamily:"Georgia,serif",letterSpacing:-1}}>L</span>
+          </div>
+          <div>
+            <div style={{fontSize:18,fontWeight:800,color:"#f0d080",fontFamily:"Georgia,serif",letterSpacing:1,lineHeight:1}}>LUCAS TRADE INTEL</div>
+            <div style={{fontSize:10,color:"#8899bb",letterSpacing:3,marginTop:3,fontFamily:"monospace"}}>OPTIONS · TECH · ENERGY</div>
+          </div>
+        </div>
+      );
+    }
+
+    function StatPill({label,value,color}) {
+      return (
+        <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,padding:"6px 14px",textAlign:"center",flex:1}}>
+          <div style={{fontSize:9,color:"#8899bb",letterSpacing:2,fontFamily:"monospace"}}>{label}</div>
+          <div style={{fontSize:15,fontWeight:700,color:color||"#f0d080",fontFamily:"monospace",marginTop:2}}>{value}</div>
+        </div>
+      );
+    }
+
+    function StockRow({data,onClick}) {
+      const signal = getSignal(data);
+      const iv     = getIVLabel(data.ivRank);
+      return (
+        <div onClick={()=>onClick(data)} style={{display:"grid",gridTemplateColumns:"76px 1fr 80px 72px 90px 28px",alignItems:"center",gap:6,padding:"10px 14px",borderBottom:"1px solid rgba(255,255,255,0.05)",cursor:"pointer"}}>
+          <div style={{fontFamily:"monospace",fontWeight:800,color:"#e8d5a0",fontSize:13}}>{data.ticker}</div>
+          <div>
+            <div style={{display:"inline-block",padding:"2px 7px",borderRadius:4,background:signal.color+"22",border:`1px solid ${signal.color}44`,fontSize:10,fontWeight:700,color:signal.color,fontFamily:"monospace",letterSpacing:1}}>
+              {signal.emoji} {signal.label}
+            </div>
+          </div>
+          <div style={{fontFamily:"monospace",fontSize:12,color:"#c8d8f0",textAlign:"right"}}>${data.price.toFixed(2)}</div>
+          <div style={{fontFamily:"monospace",fontSize:12,color:data.change>=0?"#00d4aa":"#ff4d6d",textAlign:"right"}}>{data.change>=0?"+":""}{data.change.toFixed(2)}%</div>
+          <div style={{fontSize:10,color:iv.color,fontFamily:"monospace",textAlign:"right"}}>IV {data.ivRank.toFixed(0)}%</div>
+          <div style={{fontSize:16,color:"#8899bb",textAlign:"center"}}>›</div>
+        </div>
+      );
+    }
+
+    function StockDetail({data,onClose}) {
+      const signal = getSignal(data);
+      const iv     = getIVLabel(data.ivRank);
+      return (
+        <div style={{position:"fixed",inset:0,background:"rgba(5,12,30,0.97)",zIndex:200,display:"flex",flexDirection:"column",padding:18,overflowY:"auto"}}>
+          <button onClick={onClose} style={{alignSelf:"flex-start",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",color:"#c8d8f0",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontFamily:"monospace",fontSize:12,marginBottom:20}}>← Back</button>
+          <div style={{fontSize:28,fontWeight:900,color:"#f0d080",fontFamily:"Georgia,serif",marginBottom:4}}>{data.ticker}</div>
+          <div style={{fontSize:32,fontWeight:700,color:"#e8f0ff",fontFamily:"monospace"}}>${data.price.toFixed(2)}</div>
+          <div style={{fontSize:16,color:data.change>=0?"#00d4aa":"#ff4d6d",fontFamily:"monospace",marginBottom:20}}>{data.change>=0?"+":""}{data.change.toFixed(2)}% today</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+            <StatPill label="SIGNAL"    value={signal.label} color={signal.color}/>
+            <StatPill label="MOMENTUM"  value={`${data.momentum.toFixed(0)}/100`} color={data.momentum>60?"#00d4aa":data.momentum<40?"#ff4d6d":"#a0a0b0"}/>
+            <StatPill label="IV RANK"   value={`${data.ivRank.toFixed(0)}%`} color={iv.color}/>
+            <StatPill label="NEXT EARN" value={`${data.earningsDays}d`} color={data.earningsDays<14?"#ff9f43":"#a0a0b0"}/>
+          </div>
+          {data.earningsDays < 21 && (
+            <div style={{background:"rgba(255,159,67,0.12)",border:"1px solid rgba(255,159,67,0.3)",borderRadius:10,padding:12,marginBottom:14,fontSize:12,color:"#ff9f43",fontFamily:"monospace"}}>
+              ⚠ EARNINGS IN {data.earningsDays} DAYS — Size down or use defined-risk spreads.
+            </div>
+          )}
+          <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:14}}>
+            <div style={{fontSize:10,color:"#8899bb",letterSpacing:2,fontFamily:"monospace",marginBottom:8}}>IV ANALYSIS</div>
+            <div style={{fontSize:13,color:iv.color,fontFamily:"monospace"}}>{iv.label}</div>
+            <div style={{fontSize:12,color:"#8899bb",marginTop:6,lineHeight:1.6}}>
+              {data.ivRank>70?"Options are expensive. Consider selling premium — credit spreads or cash-secured puts.":data.ivRank<30?"Options are cheap. Good time to buy calls or puts outright.":"Normal IV environment. Standard debit or credit spreads work well."}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── Main App ─────────────────────────────────────────────────────────────
+
+    function App() {
+      const [tab,           setTab]           = useState("scanner");
+      const [stocks,        setStocks]        = useState([]);
+      const [filter,        setFilter]        = useState("All");
+      const [sortBy,        setSortBy]        = useState("momentum");
+      const [selectedStock, setSelectedStock] = useState(null);
+      const [customTickers, setCustomTickers] = useState(() => { try { return JSON.parse(localStorage.getItem("lti_custom")||"[]"); } catch{return[];} });
+      const [addTicker,     setAddTicker]     = useState("");
+      const [portfolio,     setPortfolio]     = useState(() => { try { return JSON.parse(localStorage.getItem("lti_portfolio")||"[]"); } catch{return[];} });
+      const [newPos,        setNewPos]        = useState({ticker:"",type:"CALL",strike:"",expiry:"",premium:"",contracts:1});
+      const [ideaTicker,    setIdeaTicker]    = useState("");
+      const [ideaDir,       setIdeaDir]       = useState("BULLISH");
+      const [ideaReason,    setIdeaReason]    = useState("");
+      const [ideaTime,      setIdeaTime]      = useState("3 weeks");
+      const [analysis,      setAnalysis]      = useState(null);
+      const [analyzing,     setAnalyzing]     = useState(false);
+      const [lastUpdated,   setLastUpdated]   = useState(null);
+
+      // persist
+      useEffect(()=>{ try{localStorage.setItem("lti_custom", JSON.stringify(customTickers));}catch{} }, [customTickers]);
+      useEffect(()=>{ try{localStorage.setItem("lti_portfolio", JSON.stringify(portfolio));}catch{} }, [portfolio]);
+
+      const loadStocks = useCallback(()=>{
+        const tickers = [...ALL_TICKERS, ...customTickers.filter(t=>!ALL_TICKERS.includes(t))];
+        setStocks(tickers.map(mockStockData));
+        setLastUpdated(new Date());
+      },[customTickers]);
+
+      useEffect(()=>{ loadStocks(); },[loadStocks]);
+
+      const bullish = stocks.filter(s=>getSignal(s).label==="BULLISH").length;
+      const bearish = stocks.filter(s=>getSignal(s).label==="BEARISH").length;
+
+      const filtered = stocks
+        .filter(s=>{
+          if(filter==="All") return true;
+          if(filter==="Custom") return customTickers.includes(s.ticker);
+          return WATCHLIST[filter]?.includes(s.ticker);
+        })
+        .sort((a,b)=>{
+          if(sortBy==="momentum") return b.momentum-a.momentum;
+          if(sortBy==="change")   return b.change-a.change;
+          if(sortBy==="iv")       return b.ivRank-a.ivRank;
+          return 0;
+        });
+
+      const handleAddTicker = ()=>{
+        const t = addTicker.toUpperCase().trim();
+        if(t && !customTickers.includes(t) && !ALL_TICKERS.includes(t)){
+          setCustomTickers(p=>[...p,t]);
+          setAddTicker("");
+        }
+      };
+
+      const handleAnalyze = async ()=>{
+        if(!ideaTicker||!ideaReason) return;
+        setAnalyzing(true); setAnalysis(null);
+        const sd = stocks.find(s=>s.ticker===ideaTicker.toUpperCase()) || mockStockData(ideaTicker.toUpperCase());
+        const prompt = `Stock: ${ideaTicker.toUpperCase()}
+User thesis: ${ideaDir} over ${ideaTime}
+User reasoning: ${ideaReason}
+Current price: $${sd.price.toFixed(2)}
+Today's change: ${sd.change.toFixed(2)}%
+Momentum score: ${sd.momentum.toFixed(0)}/100
+IV Rank: ${sd.ivRank.toFixed(0)}%
+Days to earnings: ${sd.earningsDays}
+Technical signal: ${getSignal(sd).label}
+Analyze honestly. Disagree if data doesn't support it.`;
+        const result = await analyzeWithClaude(prompt);
+        setAnalysis(result); setAnalyzing(false);
+      };
+
+      const addPosition = ()=>{
+        if(!newPos.ticker||!newPos.strike||!newPos.expiry) return;
+        setPortfolio(p=>[...p,{...newPos,id:Date.now(),ticker:newPos.ticker.toUpperCase()}]);
+        setNewPos({ticker:"",type:"CALL",strike:"",expiry:"",premium:"",contracts:1});
+      };
+
+      // ── Styles ──
+      const S = {
+        app:      {minHeight:"100vh",background:"#060e22",backgroundImage:"radial-gradient(ellipse at 20% 20%,rgba(201,168,76,0.06) 0%,transparent 50%),radial-gradient(ellipse at 80% 80%,rgba(10,40,100,0.3) 0%,transparent 50%)",color:"#c8d8f0",maxWidth:480,margin:"0 auto"},
+        header:   {padding:"16px 16px 10px",borderBottom:"1px solid rgba(201,168,76,0.2)",background:"rgba(6,14,34,0.97)",position:"sticky",top:0,zIndex:50},
+        nav:      {display:"flex",borderBottom:"1px solid rgba(255,255,255,0.07)",background:"rgba(6,14,34,0.95)",position:"sticky",top:74,zIndex:49},
+        navBtn:   a=>({flex:1,padding:"11px 4px",border:"none",cursor:"pointer",background:a?"rgba(201,168,76,0.12)":"transparent",borderBottom:a?"2px solid #c9a84c":"2px solid transparent",color:a?"#f0d080":"#8899bb",fontSize:10,fontFamily:"monospace",letterSpacing:1,fontWeight:a?700:400}),
+        section:  {padding:14},
+        card:     {background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,overflow:"hidden",marginBottom:14},
+        cardHdr:  {padding:"9px 14px",borderBottom:"1px solid rgba(255,255,255,0.06)",fontSize:10,color:"#c9a84c",letterSpacing:3,fontFamily:"monospace",fontWeight:700},
+        input:    {background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,padding:"10px 12px",color:"#e8f0ff",fontFamily:"monospace",fontSize:13,outline:"none",width:"100%"},
+        goldBtn:  {background:"linear-gradient(135deg,#c9a84c,#f0d080,#c9a84c)",border:"none",borderRadius:8,padding:"12px 20px",color:"#0a1628",fontWeight:800,fontFamily:"monospace",fontSize:13,cursor:"pointer",letterSpacing:1,width:"100%",marginTop:8},
+        ghostBtn: {background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,padding:"10px 14px",color:"#c8d8f0",fontFamily:"monospace",fontSize:12,cursor:"pointer",letterSpacing:1},
+        fBtn:     a=>({padding:"5px 10px",borderRadius:6,border:a?"1px solid #c9a84c":"1px solid rgba(255,255,255,0.1)",background:a?"rgba(201,168,76,0.15)":"transparent",color:a?"#f0d080":"#8899bb",fontSize:10,fontFamily:"monospace",cursor:"pointer",letterSpacing:1,whiteSpace:"nowrap"}),
+        label:    {fontSize:10,color:"#8899bb",letterSpacing:2,fontFamily:"monospace",marginBottom:5,display:"block"},
+      };
+
+      const NAV = [{id:"scanner",label:"SCANNER",icon:"◈"},{id:"validator",label:"VALIDATE",icon:"◎"},{id:"portfolio",label:"PORTFOLIO",icon:"◉"}];
+
+      return (
+        <div style={S.app}>
+          {selectedStock && <StockDetail data={selectedStock} onClose={()=>setSelectedStock(null)}/>}
+
+          {/* Header */}
+          <div style={S.header}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <Logo/>
+              <button onClick={loadStocks} style={{...S.ghostBtn,padding:"6px 12px",fontSize:10}}>⟳ REFRESH</button>
+            </div>
+            <div style={{display:"flex",gap:6}}>
+              <StatPill label="BULLISH"  value={bullish} color="#00d4aa"/>
+              <StatPill label="BEARISH"  value={bearish} color="#ff4d6d"/>
+              <StatPill label="NEUTRAL"  value={stocks.length-bullish-bearish} color="#a0a0b0"/>
+              <StatPill label="WATCHING" value={stocks.length} color="#f0d080"/>
+            </div>
+            {lastUpdated && <div style={{fontSize:9,color:"#3a4a6a",fontFamily:"monospace",marginTop:6,letterSpacing:1}}>UPDATED {lastUpdated.toLocaleTimeString()}</div>}
+          </div>
+
+          {/* Nav */}
+          <div style={S.nav}>
+            {NAV.map(n=>(
+              <button key={n.id} style={S.navBtn(tab===n.id)} onClick={()=>setTab(n.id)}>
+                {n.icon} {n.label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── SCANNER ── */}
+          {tab==="scanner" && (
+            <div style={S.section}>
+              <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:10}}>
+                {["All","AI & Tech","Pure AI","Energy","ETFs","Custom"].map(f=>(
+                  <button key={f} style={S.fBtn(filter===f)} onClick={()=>setFilter(f)}>{f.toUpperCase()}</button>
+                ))}
+              </div>
+              <div style={{display:"flex",gap:6,marginBottom:12,alignItems:"center"}}>
+                <span style={{fontSize:10,color:"#8899bb",fontFamily:"monospace",letterSpacing:1,flexShrink:0}}>SORT:</span>
+                {[["momentum","MOMENTUM"],["change","% CHANGE"],["iv","IV RANK"]].map(([k,l])=>(
+                  <button key={k} style={S.fBtn(sortBy===k)} onClick={()=>setSortBy(k)}>{l}</button>
+                ))}
+              </div>
+
+              <div style={S.card}>
+                <div style={S.cardHdr}>🔥 TOP BULLISH SETUPS</div>
+                {filtered.filter(s=>getSignal(s).label==="BULLISH").slice(0,5).map(s=><StockRow key={s.ticker} data={s} onClick={setSelectedStock}/>)}
+                {filtered.filter(s=>getSignal(s).label==="BULLISH").length===0 && <div style={{padding:14,color:"#4a5a7a",fontFamily:"monospace",fontSize:12}}>No bullish setups in this filter</div>}
+              </div>
+
+              <div style={S.card}>
+                <div style={{...S.cardHdr,color:"#ff4d6d"}}>📉 TOP BEARISH SETUPS</div>
+                {filtered.filter(s=>getSignal(s).label==="BEARISH").slice(0,5).map(s=><StockRow key={s.ticker} data={s} onClick={setSelectedStock}/>)}
+                {filtered.filter(s=>getSignal(s).label==="BEARISH").length===0 && <div style={{padding:14,color:"#4a5a7a",fontFamily:"monospace",fontSize:12}}>No bearish setups in this filter</div>}
+              </div>
+
+              <div style={S.card}>
+                <div style={S.cardHdr}>◈ FULL WATCHLIST ({filtered.length})</div>
+                {filtered.map(s=><StockRow key={s.ticker} data={s} onClick={setSelectedStock}/>)}
+              </div>
+
+              <div style={S.card}>
+                <div style={S.cardHdr}>+ ADD TICKER TO WATCHLIST</div>
+                <div style={{padding:12,display:"flex",gap:8}}>
+                  <input style={{...S.input,flex:1}} placeholder="e.g. COIN" value={addTicker} onChange={e=>setAddTicker(e.target.value.toUpperCase())} onKeyDown={e=>e.key==="Enter"&&handleAddTicker()}/>
+                  <button style={S.ghostBtn} onClick={handleAddTicker}>ADD</button>
+                </div>
+                {customTickers.length>0 && (
+                  <div style={{padding:"0 12px 12px",display:"flex",flexWrap:"wrap",gap:6}}>
+                    {customTickers.map(t=>(
+                      <span key={t} style={{background:"rgba(201,168,76,0.12)",border:"1px solid rgba(201,168,76,0.3)",borderRadius:6,padding:"3px 8px",fontSize:11,color:"#f0d080",fontFamily:"monospace"}}>
+                        {t} <span onClick={()=>setCustomTickers(p=>p.filter(x=>x!==t))} style={{cursor:"pointer",marginLeft:4,color:"#ff4d6d"}}>×</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── VALIDATOR ── */}
+          {tab==="validator" && (
+            <div style={S.section}>
+              <div style={{fontSize:12,color:"#8899bb",fontFamily:"monospace",marginBottom:14,lineHeight:1.6,padding:"10px 12px",background:"rgba(201,168,76,0.06)",borderRadius:10,border:"1px solid rgba(201,168,76,0.15)"}}>
+                📌 Give me your trade idea. I'll tell you honestly if the data supports it — even if it means telling you you're wrong.
+              </div>
+              <div style={S.card}>
+                <div style={S.cardHdr}>◎ VALIDATE YOUR TRADE IDEA</div>
+                <div style={{padding:14,display:"flex",flexDirection:"column",gap:12}}>
+                  <div>
+                    <label style={S.label}>TICKER</label>
+                    <input style={S.input} placeholder="e.g. NVDA" value={ideaTicker} onChange={e=>setIdeaTicker(e.target.value.toUpperCase())}/>
+                  </div>
+                  <div>
+                    <label style={S.label}>YOUR DIRECTION</label>
+                    <div style={{display:"flex",gap:8}}>
+                      {["BULLISH","BEARISH"].map(d=>(
+                        <button key={d} onClick={()=>setIdeaDir(d)} style={{flex:1,padding:"10px",borderRadius:8,border:"1px solid",borderColor:ideaDir===d?(d==="BULLISH"?"#00d4aa":"#ff4d6d"):"rgba(255,255,255,0.1)",background:ideaDir===d?(d==="BULLISH"?"rgba(0,212,170,0.12)":"rgba(255,77,109,0.12)"):"transparent",color:ideaDir===d?(d==="BULLISH"?"#00d4aa":"#ff4d6d"):"#8899bb",fontFamily:"monospace",fontSize:12,fontWeight:700,cursor:"pointer",letterSpacing:1}}>
+                          {d==="BULLISH"?"▲ ":"▼ "}{d}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label style={S.label}>TIMEFRAME</label>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                      {["1 week","2 weeks","3 weeks","1 month","2 months"].map(t=>(
+                        <button key={t} style={S.fBtn(ideaTime===t)} onClick={()=>setIdeaTime(t)}>{t.toUpperCase()}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label style={S.label}>YOUR REASONING</label>
+                    <textarea style={{...S.input,minHeight:80,lineHeight:1.5}} placeholder="Why do you think this stock is going up/down? Be specific..." value={ideaReason} onChange={e=>setIdeaReason(e.target.value)}/>
+                  </div>
+                  <button style={S.goldBtn} onClick={handleAnalyze} disabled={analyzing}>
+                    {analyzing?"ANALYZING...":"◎ ANALYZE MY IDEA"}
+                  </button>
+                </div>
+              </div>
+
+              {analyzing && (
+                <div style={{textAlign:"center",padding:30,color:"#c9a84c",fontFamily:"monospace",fontSize:13,letterSpacing:2}}>
+                  <div style={{fontSize:24,marginBottom:12,animation:"spin 1s linear infinite"}}>◌</div>
+                  RUNNING ANALYSIS...
+                </div>
+              )}
+
+              {analysis && (
+                <div style={{...S.card,border:`1px solid ${analysis.agree?"rgba(0,212,170,0.3)":"rgba(255,77,109,0.3)"}`}}>
+                  <div style={{...S.cardHdr,color:analysis.agree?"#00d4aa":"#ff4d6d"}}>
+                    {analysis.agree?"✓ ANALYSIS AGREES":"✗ ANALYSIS DISAGREES"}
+                  </div>
+                  <div style={{padding:14,display:"flex",flexDirection:"column",gap:12}}>
+                    <div style={{display:"flex",gap:10}}>
+                      <div style={{flex:1,background:"rgba(255,255,255,0.04)",borderRadius:8,padding:12,textAlign:"center"}}>
+                        <div style={{fontSize:9,color:"#8899bb",letterSpacing:2,fontFamily:"monospace"}}>VERDICT</div>
+                        <div style={{fontSize:16,fontWeight:800,color:analysis.verdict==="BULLISH"?"#00d4aa":analysis.verdict==="BEARISH"?"#ff4d6d":"#a0a0b0",fontFamily:"monospace",marginTop:4}}>{analysis.verdict}</div>
+                      </div>
+                      <div style={{flex:1,background:"rgba(255,255,255,0.04)",borderRadius:8,padding:12,textAlign:"center"}}>
+                        <div style={{fontSize:9,color:"#8899bb",letterSpacing:2,fontFamily:"monospace"}}>CONFIDENCE</div>
+                        <div style={{fontSize:16,fontWeight:800,color:analysis.confidence>=7?"#00d4aa":analysis.confidence>=5?"#ff9f43":"#ff4d6d",fontFamily:"monospace",marginTop:4}}>{analysis.confidence}/10</div>
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:9,color:"#8899bb",letterSpacing:2,fontFamily:"monospace",marginBottom:6}}>ANALYSIS</div>
+                      <div style={{fontSize:13,color:"#c8d8f0",lineHeight:1.6}}>{analysis.reasoning}</div>
+                    </div>
+                    <div style={{background:"rgba(201,168,76,0.08)",border:"1px solid rgba(201,168,76,0.2)",borderRadius:8,padding:12}}>
+                      <div style={{fontSize:9,color:"#c9a84c",letterSpacing:2,fontFamily:"monospace",marginBottom:6}}>SUGGESTED PLAY</div>
+                      <div style={{fontSize:13,color:"#f0d080",fontFamily:"monospace"}}>{analysis.suggestedPlay}</div>
+                    </div>
+                    <div style={{background:"rgba(255,77,109,0.08)",border:"1px solid rgba(255,77,109,0.2)",borderRadius:8,padding:12}}>
+                      <div style={{fontSize:9,color:"#ff4d6d",letterSpacing:2,fontFamily:"monospace",marginBottom:6}}>⚠ KEY RISK</div>
+                      <div style={{fontSize:12,color:"#ffaabb",lineHeight:1.5}}>{analysis.keyRisk}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── PORTFOLIO ── */}
+          {tab==="portfolio" && (
+            <div style={S.section}>
+              <div style={S.card}>
+                <div style={S.cardHdr}>+ LOG NEW POSITION</div>
+                <div style={{padding:14,display:"flex",flexDirection:"column",gap:10}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <div>
+                      <label style={S.label}>TICKER</label>
+                      <input style={S.input} placeholder="NVDA" value={newPos.ticker} onChange={e=>setNewPos(p=>({...p,ticker:e.target.value.toUpperCase()}))}/>
+                    </div>
+                    <div>
+                      <label style={S.label}>TYPE</label>
+                      <div style={{display:"flex",gap:6}}>
+                        {["CALL","PUT"].map(t=>(
+                          <button key={t} onClick={()=>setNewPos(p=>({...p,type:t}))} style={{flex:1,padding:"10px 6px",borderRadius:8,border:"1px solid",borderColor:newPos.type===t?(t==="CALL"?"#00d4aa":"#ff4d6d"):"rgba(255,255,255,0.1)",background:newPos.type===t?(t==="CALL"?"rgba(0,212,170,0.12)":"rgba(255,77,109,0.12)"):"transparent",color:newPos.type===t?(t==="CALL"?"#00d4aa":"#ff4d6d"):"#8899bb",fontFamily:"monospace",fontSize:11,fontWeight:700,cursor:"pointer"}}>{t}</button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <div>
+                      <label style={S.label}>STRIKE</label>
+                      <input style={S.input} placeholder="$210" value={newPos.strike} onChange={e=>setNewPos(p=>({...p,strike:e.target.value}))}/>
+                    </div>
+                    <div>
+                      <label style={S.label}>EXPIRY</label>
+                      <input style={S.input} placeholder="05/16" value={newPos.expiry} onChange={e=>setNewPos(p=>({...p,expiry:e.target.value}))}/>
+                    </div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <div>
+                      <label style={S.label}>PREMIUM PAID</label>
+                      <input style={S.input} placeholder="$3.20" value={newPos.premium} onChange={e=>setNewPos(p=>({...p,premium:e.target.value}))}/>
+                    </div>
+                    <div>
+                      <label style={S.label}>CONTRACTS</label>
+                      <input style={S.input} type="number" min="1" value={newPos.contracts} onChange={e=>setNewPos(p=>({...p,contracts:e.target.value}))}/>
+                    </div>
+                  </div>
+                  <button style={S.goldBtn} onClick={addPosition}>+ ADD POSITION</button>
+                </div>
+              </div>
+
+              {portfolio.length===0 ? (
+                <div style={{textAlign:"center",padding:40,color:"#4a5a7a",fontFamily:"monospace"}}>
+                  <div style={{fontSize:30,marginBottom:10}}>◉</div>
+                  <div style={{fontSize:12,letterSpacing:2}}>NO OPEN POSITIONS</div>
+                  <div style={{fontSize:11,marginTop:6,color:"#3a4a6a"}}>Log your first trade above</div>
+                </div>
+              ) : (
+                <div style={S.card}>
+                  <div style={S.cardHdr}>◉ OPEN POSITIONS ({portfolio.length})</div>
+                  {portfolio.map(pos=>{
+                    const sd = stocks.find(s=>s.ticker===pos.ticker)||mockStockData(pos.ticker);
+                    const sig = getSignal(sd);
+                    const aligned = (pos.type==="CALL"&&sig.label==="BULLISH")||(pos.type==="PUT"&&sig.label==="BEARISH");
+                    return (
+                      <div key={pos.id} style={{padding:"12px 14px",borderBottom:"1px solid rgba(255,255,255,0.05)"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                            <span style={{fontFamily:"monospace",fontWeight:800,color:"#e8d5a0",fontSize:15}}>{pos.ticker}</span>
+                            <span style={{padding:"2px 8px",borderRadius:4,background:pos.type==="CALL"?"rgba(0,212,170,0.15)":"rgba(255,77,109,0.15)",color:pos.type==="CALL"?"#00d4aa":"#ff4d6d",fontSize:10,fontFamily:"monospace",fontWeight:700}}>{pos.type}</span>
+                          </div>
+                          <button onClick={()=>setPortfolio(p=>p.filter(x=>x.id!==pos.id))} style={{background:"none",border:"none",color:"#4a5a7a",cursor:"pointer",fontSize:18}}>×</button>
+                        </div>
+                        <div style={{display:"flex",gap:10,fontSize:11,fontFamily:"monospace",color:"#8899bb",flexWrap:"wrap"}}>
+                          <span>Strike: <span style={{color:"#c8d8f0"}}>{pos.strike}</span></span>
+                          <span>Exp: <span style={{color:"#c8d8f0"}}>{pos.expiry}</span></span>
+                          <span>Premium: <span style={{color:"#c8d8f0"}}>{pos.premium}</span></span>
+                          <span>Qty: <span style={{color:"#c8d8f0"}}>{pos.contracts}</span></span>
+                        </div>
+                        <div style={{marginTop:8,padding:"6px 10px",borderRadius:6,background:aligned?"rgba(0,212,170,0.08)":"rgba(255,159,67,0.08)",border:`1px solid ${aligned?"rgba(0,212,170,0.2)":"rgba(255,159,67,0.2)"}`,fontSize:11,color:aligned?"#00d4aa":"#ff9f43",fontFamily:"monospace"}}>
+                          {aligned?"✓ Signal aligned with your position":"⚠ Current signal doesn't favor your position — monitor closely"}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Footer */}
+          <div style={{padding:"18px 14px",borderTop:"1px solid rgba(255,255,255,0.06)",textAlign:"center"}}>
+            <div style={{fontSize:9,color:"#3a4a6a",fontFamily:"monospace",lineHeight:1.8,letterSpacing:1}}>
+              LUCAS TRADE INTEL — FOR INFORMATIONAL PURPOSES ONLY<br/>
+              NOT FINANCIAL ADVICE · OPTIONS TRADING INVOLVES SUBSTANTIAL RISK<br/>
+              © LUCAS HEATING LLC
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  </script>
+  <style>
+    @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+  </style>
+</body>
+</html>
