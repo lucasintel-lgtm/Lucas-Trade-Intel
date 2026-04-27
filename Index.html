@@ -34,9 +34,170 @@ const {useState,useEffect,useCallback,useRef} = React;
 
 // ── API Keys ──────────────────────────────────────────────────────────────────
 const FINNHUB_KEY    = "d7n9ufhr01qppri44j10d7n9ufhr01qppri44j1g";
-const FLASHALPHA_KEY = "lnPcLNxQez9tYGjPSEbLn4UlmX4ekbGAJg2BCbFc";
+const TRADIER_KEY    = "JUZ5AWbGl1toBGSheGXfkgOljfGH";
+const TRADIER_BASE   = "https://api.tradier.com/v1";
 
 // ── Watchlist ─────────────────────────────────────────────────────────────────
+// ── Tradier API functions ─────────────────────────────────────────────────────
+
+// Fetch real-time quote from Tradier
+async function fetchTradierQuote(ticker){
+  try{
+    const r=await fetch(`${TRADIER_BASE}/markets/quotes?symbols=${ticker}&greeks=false`,{
+      headers:{"Authorization":`Bearer ${TRADIER_KEY}`,"Accept":"application/json"}
+    });
+    const d=await r.json();
+    const q=d?.quotes?.quote;
+    if(!q||q.last===null) return null;
+    return{
+      price:q.last||q.close,
+      change:q.change_percentage||0,
+      open:q.open,high:q.high,low:q.low,prevClose:q.prevclose,
+      volume:q.volume,avgVolume:q.average_volume,
+      week52High:q.week_52_high,week52Low:q.week_52_low,
+      bidPrice:q.bid,askPrice:q.ask
+    };
+  }catch{return null;}
+}
+
+// Fetch real options chain from Tradier
+async function fetchTradierOptions(ticker){
+  try{
+    // Get available expirations first
+    const expR=await fetch(`${TRADIER_BASE}/markets/options/expirations?symbol=${ticker}&includeAllRoots=true`,{
+      headers:{"Authorization":`Bearer ${TRADIER_KEY}`,"Accept":"application/json"}
+    });
+    const expD=await expR.json();
+    const expirations=expD?.expirations?.date;
+    if(!expirations||!expirations.length) return null;
+
+    // Find best expirations: one weekly (7-14 DTE) and one monthly (21-45 DTE)
+    const now=new Date();
+    const addDays=(d,n)=>new Date(d.getTime()+n*86400000);
+    const weekly=expirations.find(e=>{
+      const d=new Date(e);
+      const dte=Math.round((d-now)/86400000);
+      return dte>=7&&dte<=16;
+    });
+    const monthly=expirations.find(e=>{
+      const d=new Date(e);
+      const dte=Math.round((d-now)/86400000);
+      return dte>=21&&dte<=50;
+    });
+
+    const fetchChain=async(expiry)=>{
+      if(!expiry) return null;
+      const r=await fetch(`${TRADIER_BASE}/markets/options/chains?symbol=${ticker}&expiration=${expiry}&greeks=true`,{
+        headers:{"Authorization":`Bearer ${TRADIER_KEY}`,"Accept":"application/json"}
+      });
+      const d=await r.json();
+      return d?.options?.option||null;
+    };
+
+    const [weeklyChain,monthlyChain]=await Promise.all([
+      fetchChain(weekly),fetchChain(monthly)
+    ]);
+
+    return{
+      weeklyExpiry:weekly,monthlyExpiry:monthly,
+      weeklyChain,monthlyChain
+    };
+  }catch{return null;}
+}
+
+// Get IV rank from Tradier options data
+function calcIVRankFromChain(chain){
+  if(!chain||!chain.length) return null;
+  const ivs=chain.filter(o=>o.greeks?.mid_iv>0).map(o=>o.greeks.mid_iv*100);
+  if(!ivs.length) return null;
+  const avgIV=ivs.reduce((a,b)=>a+b,0)/ivs.length;
+  // Estimate IV rank — compare current IV to a reasonable range
+  const minIV=Math.min(...ivs);
+  const maxIV=Math.max(...ivs);
+  return maxIV>minIV?Math.round(((avgIV-minIV)/(maxIV-minIV))*100):50;
+}
+
+// Find best spread legs for a debit spread
+function findBestSpread(chain,direction,currentPrice){
+  if(!chain||!chain.length) return null;
+  const type=direction==="BULLISH"?"call":"put";
+  const contracts=chain.filter(o=>
+    o.option_type===type&&
+    o.greeks?.delta!=null&&
+    o.bid>0&&o.ask>0&&
+    (o.ask-o.bid)<2 // reasonable bid/ask spread
+  );
+  if(contracts.length<2) return null;
+
+  // Long leg: delta 0.45-0.60
+  const longLeg=contracts.find(o=>{
+    const d=Math.abs(o.greeks.delta);
+    return d>=0.40&&d<=0.65;
+  });
+  if(!longLeg) return null;
+
+  // Short leg: delta 0.25-0.35, different strike
+  const shortLeg=contracts.find(o=>{
+    const d=Math.abs(o.greeks.delta);
+    const diffStrike=direction==="BULLISH"?o.strike>longLeg.strike:o.strike<longLeg.strike;
+    return d>=0.20&&d<=0.38&&diffStrike;
+  });
+  if(!shortLeg) return null;
+
+  const debit=parseFloat((longLeg.ask-shortLeg.bid).toFixed(2));
+  const spreadWidth=Math.abs(longLeg.strike-shortLeg.strike);
+  const maxGain=parseFloat((spreadWidth-debit).toFixed(2));
+  const riskReward=maxGain>0?parseFloat((maxGain/debit).toFixed(2)):0;
+  const bidAskWidth=parseFloat((longLeg.ask-longLeg.bid).toFixed(2));
+
+  return{
+    longStrike:longLeg.strike,longDelta:longLeg.greeks.delta?.toFixed(2),
+    longBid:longLeg.bid,longAsk:longLeg.ask,longOI:longLeg.open_interest,
+    shortStrike:shortLeg.strike,shortDelta:shortLeg.greeks.delta?.toFixed(2),
+    shortBid:shortLeg.bid,shortAsk:shortLeg.ask,shortOI:shortLeg.open_interest,
+    debit,maxGain,spreadWidth,riskReward,bidAskWidth,
+    theta:longLeg.greeks.theta?.toFixed(3),
+    gamma:longLeg.greeks.gamma?.toFixed(3),
+    liquidityGood:bidAskWidth<0.50&&longLeg.open_interest>100,
+    riskRewardGood:riskReward>=1.0
+  };
+}
+
+// Full Tradier data fetch for one ticker
+async function fetchTradierFull(ticker){
+  try{
+    const [quote,options]=await Promise.all([
+      fetchTradierQuote(ticker),
+      fetchTradierOptions(ticker)
+    ]);
+    if(!quote) return null;
+
+    // Get IV rank from options chain
+    const allContracts=[
+      ...(options?.weeklyChain||[]),
+      ...(options?.monthlyChain||[])
+    ];
+    const ivRank=calcIVRankFromChain(allContracts);
+
+    // Find best spreads
+    const weeklyCallSpread=options?.weeklyChain?findBestSpread(options.weeklyChain,"BULLISH",quote.price):null;
+    const weeklyPutSpread=options?.weeklyChain?findBestSpread(options.weeklyChain,"BEARISH",quote.price):null;
+    const monthlyCallSpread=options?.monthlyChain?findBestSpread(options.monthlyChain,"BULLISH",quote.price):null;
+    const monthlyPutSpread=options?.monthlyChain?findBestSpread(options.monthlyChain,"BEARISH",quote.price):null;
+
+    return{
+      ...quote,
+      ivRank,
+      tradierLive:true,
+      weeklyExpiry:options?.weeklyExpiry,
+      monthlyExpiry:options?.monthlyExpiry,
+      weeklyCallSpread,weeklyPutSpread,
+      monthlyCallSpread,monthlyPutSpread,
+      hasRealOptions:!!(weeklyCallSpread||monthlyCallSpread)
+    };
+  }catch{return null;}
+}
+
 const WATCHLIST = {
   "AI & Chips":   ["NVDA","AMD","AVGO","TSM","ARM","ASML","AMAT","MU","SMCI","QCOM","INTC","MRVL","KLAC","LRCX"],
   "AI Software":  ["MSFT","GOOGL","META","AMZN","PLTR","CRM","NOW","ORCL","SNOW","DDOG","NET","SOUN","AI","BBAI"],
@@ -351,32 +512,150 @@ async function fetchStock(ticker){
   }catch{return null;}
 }
 
-async function fetchFlashIV(ticker){
-  try{
-    const r=await fetch(`https://api.flashalpha.com/v1/iv?symbol=${ticker}`,{headers:{"X-API-Key":FLASHALPHA_KEY}});
-    if(!r.ok) return null;
-    const d=await r.json();
-    const ivRank=d.iv_rank??d.ivRank??d.iv_percentile??null;
-    return ivRank!==null?ivRank:null;
-  }catch{return null;}
-}
-
 async function loadAllStocks(extraTickers,onProgress){
   const tickers=[...new Set([...ALL_TICKERS,...extraTickers])];
-  const results=[];let flashUsed=0;
+  const results=[];
+
+  // Fetch all Tradier quotes in one batch call first (very fast)
+  let tradierQuotes={};
+  try{
+    const symbols=tickers.join(",");
+    const r=await fetch(`${TRADIER_BASE}/markets/quotes?symbols=${symbols}&greeks=false`,{
+      headers:{"Authorization":`Bearer ${TRADIER_KEY}`,"Accept":"application/json"}
+    });
+    const d=await r.json();
+    const quotes=d?.quotes?.quote;
+    if(Array.isArray(quotes)){
+      quotes.forEach(q=>{if(q.symbol) tradierQuotes[q.symbol]=q;});
+    } else if(quotes?.symbol){
+      tradierQuotes[quotes.symbol]=quotes;
+    }
+  }catch(e){console.warn("Tradier batch quote failed:",e);}
+
+  // Now process each ticker
   for(let i=0;i<tickers.length;i++){
     const t=tickers[i];
     if(onProgress) onProgress(i+1,tickers.length,t);
-    let d=await fetchStock(t)||mockStock(t);
-    if(d.live&&flashUsed<5){
-      const iv=await fetchFlashIV(t);
-      if(iv!==null){d.ivRank=iv;flashUsed++;}
+
+    let stockData=null;
+
+    // Try Tradier quote first
+    const tq=tradierQuotes[t];
+    if(tq&&tq.last){
+      stockData={
+        ticker:t,live:true,tradierLive:true,
+        price:tq.last||tq.close,
+        change:tq.change_percentage||0,
+        open:tq.open,high:tq.high,low:tq.low,
+        prevClose:tq.prevclose,volume:tq.volume,
+        avgVolume:tq.average_volume,
+        week52High:tq.week_52_high,week52Low:tq.week_52_low,
+        ivRank:null,rsi:50,ema20:null,ema50:null,macdHist:null,
+        bbUpper:null,bbLower:null,support:null,resistance:null,
+        earningsDays:999,sentiment:"neutral",newsHeadlines:[],
+        weeklyCallSpread:null,weeklyPutSpread:null,
+        monthlyCallSpread:null,monthlyPutSpread:null,hasRealOptions:false
+      };
     }
-    if(d.ivRank===null){const s=t.split("").reduce((a,c)=>a+c.charCodeAt(0),0);d.ivRank=((Math.sin(s*6)*10000)%1+1)/2*100;}
-    results.push(d);
-    if(i<tickers.length-1) await new Promise(r=>setTimeout(r,150));
+
+    // Get chart data from Finnhub (candles for indicators)
+    try{
+      const cRes=await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${t}&resolution=D&from=${Math.floor(Date.now()/1000)-86400*220}&to=${Math.floor(Date.now()/1000)}&token=${FINNHUB_KEY}`);
+      const candles=await cRes.json();
+      if(candles.s==="ok"&&candles.c?.length>=15){
+        const c=candles.c,h=candles.h,l=candles.l;
+        const rsi=calcRSI(c);
+        const ema20=c.length>=20?parseFloat(calcEMA(c,20).toFixed(2)):null;
+        const ema50=c.length>=50?parseFloat(calcEMA(c,50).toFixed(2)):null;
+        const{hist:macdHist}=calcMACD(c);
+        const{upper:bbUpper,lower:bbLower}=calcBB(c);
+        let support=null,resistance=null;
+        if(h&&l&&h.length>=20){
+          const rH=h.slice(-20),rL=l.slice(-20);
+          support=parseFloat((rL.slice().sort((a,b)=>a-b).slice(0,3).reduce((a,b)=>a+b,0)/3).toFixed(2));
+          resistance=parseFloat((rH.slice().sort((a,b)=>b-a).slice(0,3).reduce((a,b)=>a+b,0)/3).toFixed(2));
+        }
+        if(stockData){
+          stockData={...stockData,rsi,ema20,ema50,macdHist,bbUpper,bbLower,support,resistance};
+        } else {
+          // No Tradier quote — use last candle close
+          const lastClose=c[c.length-1];
+          const prevClose=c[c.length-2]||lastClose;
+          stockData={
+            ticker:t,live:false,tradierLive:false,
+            price:lastClose,change:prevClose>0?((lastClose-prevClose)/prevClose)*100:0,
+            open:null,high:h?h[h.length-1]:null,low:l?l[l.length-1]:null,
+            prevClose,volume:null,avgVolume:null,
+            rsi,ema20,ema50,macdHist,bbUpper,bbLower,support,resistance,
+            ivRank:null,earningsDays:999,sentiment:"neutral",newsHeadlines:[],
+            weeklyCallSpread:null,weeklyPutSpread:null,
+            monthlyCallSpread:null,monthlyPutSpread:null,hasRealOptions:false
+          };
+        }
+      }
+    }catch{}
+
+    // Get news + earnings from Finnhub
+    try{
+      const[nRes,eRes]=await Promise.all([
+        fetch(`https://finnhub.io/api/v1/company-news?symbol=${t}&from=${getDateStr(-7)}&to=${getDateStr(0)}&token=${FINNHUB_KEY}`),
+        fetch(`https://finnhub.io/api/v1/calendar/earnings?symbol=${t}&token=${FINNHUB_KEY}`)
+      ]);
+      const news=await nRes.json();
+      const earnings=await eRes.json();
+
+      let bull=0,bear=0;const newsHeadlines=[];
+      if(Array.isArray(news)){
+        news.slice(0,8).forEach(n=>{
+          const txt=(n.headline||"").toLowerCase();
+          const b=["surge","jump","beat","rise","gain","upgrade","strong","bullish","rally"].some(w=>txt.includes(w));
+          const bd=["fall","drop","miss","decline","loss","downgrade","weak","bearish","crash"].some(w=>txt.includes(w));
+          if(b)bull++;if(bd)bear++;
+          if(newsHeadlines.length<3) newsHeadlines.push({headline:n.headline,sentiment:b?"bullish":bd?"bearish":"neutral",source:n.source});
+        });
+      }
+      const sentiment=bull>bear?"bullish":bear>bull?"bearish":"neutral";
+
+      let earningsDays=999;
+      if(earnings.earningsCalendar?.length>0){
+        const nx=earnings.earningsCalendar.find(x=>new Date(x.date)>=new Date());
+        if(nx) earningsDays=Math.round((new Date(nx.date)-new Date())/86400000);
+      }
+
+      if(stockData){stockData={...stockData,sentiment,newsHeadlines,earningsDays};}
+    }catch{}
+
+    // Fallback to mock if nothing worked
+    if(!stockData) stockData=mockStock(t);
+
+    // Estimate IV rank if not set
+    if(stockData.ivRank===null){
+      const s=t.split("").reduce((a,c)=>a+c.charCodeAt(0),0);
+      stockData.ivRank=((Math.sin(s*6)*10000)%1+1)/2*100;
+    }
+
+    results.push(stockData);
+
+    // Small throttle for Finnhub
+    if(i<tickers.length-1) await new Promise(r=>setTimeout(r,120));
   }
   return results;
+}
+
+// Fetch real options data for a specific stock (called on demand when viewing detail)
+async function enrichWithOptions(ticker,currentPrice,direction){
+  try{
+    const options=await fetchTradierOptions(ticker);
+    if(!options) return null;
+    const allContracts=[...(options.weeklyChain||[]),...(options.monthlyChain||[])];
+    const ivRank=calcIVRankFromChain(allContracts);
+    const weeklyCallSpread=options.weeklyChain?findBestSpread(options.weeklyChain,"BULLISH",currentPrice):null;
+    const weeklyPutSpread=options.weeklyChain?findBestSpread(options.weeklyChain,"BEARISH",currentPrice):null;
+    const monthlyCallSpread=options.monthlyChain?findBestSpread(options.monthlyChain,"BULLISH",currentPrice):null;
+    const monthlyPutSpread=options.monthlyChain?findBestSpread(options.monthlyChain,"BEARISH",currentPrice):null;
+    return{ivRank,weeklyExpiry:options.weeklyExpiry,monthlyExpiry:options.monthlyExpiry,
+      weeklyCallSpread,weeklyPutSpread,monthlyCallSpread,monthlyPutSpread,hasRealOptions:true};
+  }catch{return null;}
 }
 
 // ── Claude API ────────────────────────────────────────────────────────────────
@@ -589,8 +868,27 @@ function StockCard({stock,scoreData,onClick}){
 function StockDetail({stock,scoreData,onClose,onLogTrade}){
   const [read,setRead]=useState(null);
   const [readLoading,setReadLoading]=useState(false);
-  const spread=getSpreadGuidance(stock,scoreData);
+  const [optionsData,setOptionsData]=useState(null);
+  const [optionsLoading,setOptionsLoading]=useState(false);
   const dc=decisionColor(scoreData.decision);
+
+  // Load real options data from Tradier when detail opens
+  useEffect(()=>{
+    if(scoreData.decision==="SKIP") return;
+    setOptionsLoading(true);
+    enrichWithOptions(stock.ticker,stock.price,scoreData.direction).then(d=>{
+      setOptionsData(d);
+      setOptionsLoading(false);
+    });
+  },[stock.ticker]);
+
+  // Use real options data if available, else fall back to estimates
+  const realSpread=optionsData?(
+    scoreData.direction==="BULLISH"
+      ?(scoreData.expiration.includes("7")?optionsData.weeklyCallSpread:optionsData.monthlyCallSpread)
+      :(scoreData.expiration.includes("7")?optionsData.weeklyPutSpread:optionsData.monthlyPutSpread)
+  ):null;
+  const estimatedSpread=getSpreadGuidance(stock,scoreData);
 
   const handleRead=async()=>{
     setReadLoading(true);setRead(null);
@@ -660,31 +958,102 @@ function StockDetail({stock,scoreData,onClose,onLogTrade}){
           </div>
         </div>
 
-        {/* Spread Construction */}
-        {spread&&(
+        {/* Real Options Chain from Tradier */}
+        {scoreData.decision!=="SKIP"&&(
           <div style={card}>
-            <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,fontSize:11,color:C.blue,letterSpacing:2,fontFamily:"'DM Mono',monospace"}}>📐 {spread.type.toUpperCase()}</div>
+            <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,fontSize:11,color:C.blue,letterSpacing:2,fontFamily:"'DM Mono',monospace",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span>📐 {scoreData.direction==="BULLISH"?"CALL":"PUT"} DEBIT SPREAD</span>
+              {optionsData?.hasRealOptions&&<span style={{fontSize:9,color:C.green,background:"rgba(0,200,150,0.15)",padding:"2px 8px",borderRadius:4}}>● LIVE TRADIER DATA</span>}
+              {optionsLoading&&<span style={{fontSize:9,color:C.amber}}>Loading options…</span>}
+            </div>
             <div style={{padding:14,display:"flex",flexDirection:"column",gap:10}}>
-              <div style={{background:"rgba(0,200,150,0.06)",borderRadius:10,padding:12,border:`1px solid ${C.green}20`}}>
-                <div style={{fontSize:10,color:C.green,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:4}}>BUY (LONG LEG)</div>
-                <div style={{fontSize:13,color:C.text,fontWeight:500}}>{spread.longLeg}</div>
-              </div>
-              <div style={{background:"rgba(240,70,90,0.06)",borderRadius:10,padding:12,border:`1px solid ${C.red}20`}}>
-                <div style={{fontSize:10,color:C.red,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:4}}>SELL (SHORT LEG)</div>
-                <div style={{fontSize:13,color:C.text,fontWeight:500}}>{spread.shortLeg}</div>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                {[["EXPIRATION",spread.dte,C.gold],["MAX LOSS",spread.maxLoss,C.red],["PROFIT TARGET",spread.target,C.green],["STOP LOSS",spread.stop,C.amber]].map(([l,v,c])=>(
-                  <div key={l} style={{background:C.bg3,borderRadius:8,padding:"8px 10px"}}>
-                    <div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:3}}>{l}</div>
-                    <div style={{fontSize:11,color:c,lineHeight:1.4}}>{v}</div>
+              {realSpread?(
+                <>
+                  {/* Real spread from Tradier */}
+                  <div style={{background:"rgba(0,200,150,0.06)",borderRadius:10,padding:12,border:`1px solid ${C.green}20`}}>
+                    <div style={{fontSize:10,color:C.green,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:6}}>BUY (LONG LEG) — {scoreData.direction==="BULLISH"?"CALL":"PUT"}</div>
+                    <div style={{fontSize:15,fontWeight:600,color:C.text,fontFamily:"'DM Mono',monospace",marginBottom:4}}>${realSpread.longStrike} strike</div>
+                    <div style={{display:"flex",gap:12,fontSize:11,color:C.text2,flexWrap:"wrap"}}>
+                      <span>Delta: <span style={{color:C.text}}>{realSpread.longDelta}</span></span>
+                      <span>Bid: <span style={{color:C.text}}>${realSpread.longBid}</span></span>
+                      <span>Ask: <span style={{color:C.text}}>${realSpread.longAsk}</span></span>
+                      <span>OI: <span style={{color:realSpread.longOI>100?C.green:C.amber}}>{realSpread.longOI?.toLocaleString()}</span></span>
+                    </div>
                   </div>
-                ))}
-              </div>
-              <div style={{background:"rgba(59,130,246,0.08)",borderRadius:8,padding:10,border:`1px solid ${C.blue}20`}}>
-                <div style={{fontSize:10,color:C.blue,fontFamily:"'DM Mono',monospace",marginBottom:3}}>⚠ LIQUIDITY CHECK</div>
-                <div style={{fontSize:11,color:C.text2}}>{spread.note}</div>
-              </div>
+                  <div style={{background:"rgba(240,70,90,0.06)",borderRadius:10,padding:12,border:`1px solid ${C.red}20`}}>
+                    <div style={{fontSize:10,color:C.red,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:6}}>SELL (SHORT LEG) — {scoreData.direction==="BULLISH"?"CALL":"PUT"}</div>
+                    <div style={{fontSize:15,fontWeight:600,color:C.text,fontFamily:"'DM Mono',monospace",marginBottom:4}}>${realSpread.shortStrike} strike</div>
+                    <div style={{display:"flex",gap:12,fontSize:11,color:C.text2,flexWrap:"wrap"}}>
+                      <span>Delta: <span style={{color:C.text}}>{realSpread.shortDelta}</span></span>
+                      <span>Bid: <span style={{color:C.text}}>${realSpread.shortBid}</span></span>
+                      <span>Ask: <span style={{color:C.text}}>${realSpread.shortAsk}</span></span>
+                      <span>OI: <span style={{color:realSpread.shortOI>100?C.green:C.amber}}>{realSpread.shortOI?.toLocaleString()}</span></span>
+                    </div>
+                  </div>
+                  {/* Spread metrics */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    {[
+                      ["MAX COST (DEBIT)",`$${realSpread.debit}`,C.red],
+                      ["MAX GAIN",`$${realSpread.maxGain}`,C.green],
+                      ["RISK/REWARD",`${realSpread.riskReward}:1`,realSpread.riskRewardGood?C.green:C.amber],
+                      ["SPREAD WIDTH",`$${realSpread.spreadWidth}`,C.text2],
+                      ["THETA (decay/day)",realSpread.theta,C.amber],
+                      ["LIQUIDITY",realSpread.liquidityGood?"GOOD ✓":"CHECK ⚠",realSpread.liquidityGood?C.green:C.amber]
+                    ].map(([l,v,c])=>(
+                      <div key={l} style={{background:C.bg3,borderRadius:8,padding:"8px 10px"}}>
+                        <div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:3}}>{l}</div>
+                        <div style={{fontSize:13,fontWeight:600,color:c}}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Expiry */}
+                  <div style={{background:"rgba(201,168,76,0.08)",borderRadius:8,padding:10,border:`1px solid ${C.gold}20`}}>
+                    <div style={{fontSize:10,color:C.gold,fontFamily:"'DM Mono',monospace",marginBottom:3}}>EXPIRATION</div>
+                    <div style={{fontSize:13,color:C.text}}>{scoreData.expiration.includes("7")?optionsData?.weeklyExpiry:optionsData?.monthlyExpiry} ({scoreData.expiration})</div>
+                  </div>
+                  {/* Profit/Stop guidance */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <div style={{background:"rgba(0,200,150,0.06)",borderRadius:8,padding:10,border:`1px solid ${C.green}20`}}>
+                      <div style={{fontSize:9,color:C.green,fontFamily:"'DM Mono',monospace",marginBottom:3}}>PROFIT TARGET</div>
+                      <div style={{fontSize:12,color:C.text2}}>Exit at 50–80% gain (~${(realSpread.maxGain*0.65).toFixed(2)} profit)</div>
+                    </div>
+                    <div style={{background:"rgba(240,70,90,0.06)",borderRadius:8,padding:10,border:`1px solid ${C.red}20`}}>
+                      <div style={{fontSize:9,color:C.red,fontFamily:"'DM Mono',monospace",marginBottom:3}}>STOP LOSS</div>
+                      <div style={{fontSize:12,color:C.text2}}>Exit if spread loses 40–50% (~${(realSpread.debit*0.5).toFixed(2)} loss)</div>
+                    </div>
+                  </div>
+                  {!realSpread.liquidityGood&&(
+                    <div style={{background:"rgba(245,158,11,0.08)",borderRadius:8,padding:10,border:`1px solid ${C.amber}20`}}>
+                      <div style={{fontSize:11,color:C.amber}}>⚠ Check liquidity on your broker before entering — open interest may be low or bid/ask spread may be wide</div>
+                    </div>
+                  )}
+                </>
+              ):optionsLoading?(
+                <div style={{textAlign:"center",padding:20,color:C.blue,fontFamily:"'DM Mono',monospace",fontSize:11}}>
+                  <div style={{fontSize:18,display:"inline-block",animation:"spin 1s linear infinite",marginBottom:6}}>◌</div>
+                  <div>Loading real options chain from Tradier…</div>
+                </div>
+              ):(
+                // Fallback to estimated spread
+                estimatedSpread&&(
+                  <>
+                    <div style={{background:"rgba(245,158,11,0.06)",borderRadius:8,padding:10,marginBottom:4,border:`1px solid ${C.amber}20`}}>
+                      <div style={{fontSize:11,color:C.amber}}>⚠ Estimated spread — real options data unavailable for this ticker right now</div>
+                    </div>
+                    <div style={{background:"rgba(0,200,150,0.06)",borderRadius:10,padding:12,border:`1px solid ${C.green}20`}}>
+                      <div style={{fontSize:10,color:C.green,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:4}}>BUY (LONG LEG)</div>
+                      <div style={{fontSize:13,color:C.text,fontWeight:500}}>{estimatedSpread.longLeg}</div>
+                    </div>
+                    <div style={{background:"rgba(240,70,90,0.06)",borderRadius:10,padding:12,border:`1px solid ${C.red}20`}}>
+                      <div style={{fontSize:10,color:C.red,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:4}}>SELL (SHORT LEG)</div>
+                      <div style={{fontSize:13,color:C.text,fontWeight:500}}>{estimatedSpread.shortLeg}</div>
+                    </div>
+                    <div style={{background:"rgba(59,130,246,0.08)",borderRadius:8,padding:10,border:`1px solid ${C.blue}20`}}>
+                      <div style={{fontSize:11,color:C.blue}}>{estimatedSpread.note}</div>
+                    </div>
+                  </>
+                )
+              )}
             </div>
           </div>
         )}
@@ -1068,7 +1437,7 @@ function App(){
             </div>
           ))}
         </div>
-        {lastUpdated&&<div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace"}}><span style={{width:6,height:6,borderRadius:"50%",background:liveCount>0?C.green:C.text3,display:"inline-block",marginRight:4,verticalAlign:"middle"}}/>{lastUpdated.toLocaleTimeString()} · {liveCount} live feeds</div>}
+        {lastUpdated&&<div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace"}}><span style={{width:6,height:6,borderRadius:"50%",background:liveCount>0?C.green:C.text3,display:"inline-block",marginRight:4,verticalAlign:"middle"}}/>{lastUpdated.toLocaleTimeString()} · {liveCount} Tradier live feeds</div>}
       </div>
 
       {/* Nav */}
