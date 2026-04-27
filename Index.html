@@ -163,6 +163,39 @@ function findBestSpread(chain,direction,currentPrice){
   };
 }
 
+// Fetch daily OHLC history from Tradier (replaces Finnhub /stock/candle)
+async function fetchTradierHistory(ticker){
+  try{
+    const end=new Date();
+    const start=new Date();
+    start.setDate(start.getDate()-220);
+    const fmt=d=>d.toISOString().split("T")[0];
+    const r=await fetch(`${TRADIER_BASE}/markets/history?symbol=${ticker}&interval=daily&start=${fmt(start)}&end=${fmt(end)}`,{
+      headers:{"Authorization":`Bearer ${TRADIER_KEY}`,"Accept":"application/json"}
+    });
+    const d=await r.json();
+    const day=d?.history?.day;
+    if(!day) return null;
+    // Tradier returns a single object when only one day — normalize to array
+    const arr=Array.isArray(day)?day:[day];
+    if(arr.length<15) return null;
+    return{
+      closes:arr.map(x=>x.close),
+      highs:arr.map(x=>x.high),
+      lows:arr.map(x=>x.low),
+      volumes:arr.map(x=>x.volume),
+      dates:arr.map(x=>x.date)
+    };
+  }catch{return null;}
+}
+
+// 20-day average volume from history
+function calcAvgVolume(volumes,n=20){
+  if(!volumes||volumes.length<n) return null;
+  const recent=volumes.slice(-n);
+  return Math.round(recent.reduce((a,b)=>a+b,0)/n);
+}
+
 // Full Tradier data fetch for one ticker
 async function fetchTradierFull(ticker){
   try{
@@ -382,7 +415,7 @@ function scoreStock(d,spySignal,qqqSignal){
   // DATA CHECK — incomplete indicator data, parked in WAIT for the user to verify
   else if(dataMissing){
     decision="WAIT";strategy="DATA CHECK REQUIRED";expiration="21–45 DTE";confidence="Low";
-    warnings.push("Some indicator data missing — verify the chart on your broker before deciding");
+    warnings.push("I can see the live price, but I need more chart data before I can rate this one.");
   }
   // TRADE — high score AND clear direction AND market confirms direction
   else if(score>=70&&direction!=="NEUTRAL"&&marketConfirms){
@@ -570,7 +603,7 @@ async function loadAllStocks(extraTickers,onProgress){
     const tq=tradierQuotes[t];
     if(tq&&tq.last){
       stockData={
-        ticker:t,live:true,tradierLive:true,
+        ticker:t,live:true,tradierLive:true,priceLive:true,chartLive:false,
         price:tq.last||tq.close,
         change:tq.change_percentage||0,
         open:tq.open,high:tq.high,low:tq.low,
@@ -585,17 +618,17 @@ async function loadAllStocks(extraTickers,onProgress){
       };
     }
 
-    // Get chart data from Finnhub (candles for indicators)
+    // Get chart data from Tradier history (daily OHLC for indicators)
     try{
-      const cRes=await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${t}&resolution=D&from=${Math.floor(Date.now()/1000)-86400*220}&to=${Math.floor(Date.now()/1000)}&token=${FINNHUB_KEY}`);
-      const candles=await cRes.json();
-      if(candles.s==="ok"&&candles.c?.length>=15){
-        const c=candles.c,h=candles.h,l=candles.l;
+      const hist=await fetchTradierHistory(t);
+      if(hist&&hist.closes.length>=15){
+        const c=hist.closes,h=hist.highs,l=hist.lows,v=hist.volumes;
         const rsi=calcRSI(c);
         const ema20=c.length>=20?parseFloat(calcEMA(c,20).toFixed(2)):null;
         const ema50=c.length>=50?parseFloat(calcEMA(c,50).toFixed(2)):null;
         const{hist:macdHist}=calcMACD(c);
         const{upper:bbUpper,lower:bbLower}=calcBB(c);
+        const avgVolume=calcAvgVolume(v);
         let support=null,resistance=null;
         if(h&&l&&h.length>=20){
           const rH=h.slice(-20),rL=l.slice(-20);
@@ -603,24 +636,28 @@ async function loadAllStocks(extraTickers,onProgress){
           resistance=parseFloat((rH.slice().sort((a,b)=>b-a).slice(0,3).reduce((a,b)=>a+b,0)/3).toFixed(2));
         }
         if(stockData){
-          stockData={...stockData,rsi,ema20,ema50,macdHist,bbUpper,bbLower,support,resistance};
+          stockData={...stockData,rsi,ema20,ema50,macdHist,bbUpper,bbLower,support,resistance,avgVolume,chartLive:true};
         } else {
-          // No Tradier quote — use last candle close
+          // No Tradier quote — fall back to history's most recent close
           const lastClose=c[c.length-1];
           const prevClose=c[c.length-2]||lastClose;
           stockData={
-            ticker:t,live:false,tradierLive:false,
+            ticker:t,live:true,tradierLive:false,priceLive:true,chartLive:true,
             price:lastClose,change:prevClose>0?((lastClose-prevClose)/prevClose)*100:0,
             open:null,high:h?h[h.length-1]:null,low:l?l[l.length-1]:null,
-            prevClose,volume:null,avgVolume:null,
+            prevClose,volume:v?v[v.length-1]:null,avgVolume,
             rsi,ema20,ema50,macdHist,bbUpper,bbLower,support,resistance,
             ivRank:null,earningsDays:999,sentiment:"neutral",newsHeadlines:[],
             weeklyCallSpread:null,weeklyPutSpread:null,
             monthlyCallSpread:null,monthlyPutSpread:null,hasRealOptions:false
           };
         }
+      } else if(stockData){
+        stockData.chartLive=false;
       }
-    }catch{}
+    }catch{
+      if(stockData) stockData.chartLive=false;
+    }
 
     // Get news + earnings from Finnhub
     try{
@@ -841,6 +878,32 @@ function DecisionBadge({decision,size=12}){
   return <span style={{fontSize:size,background:decisionBg(decision),border:`1px solid ${color}30`,color,borderRadius:6,padding:"3px 10px",fontFamily:"'DM Mono',monospace",fontWeight:700,letterSpacing:1}}>{emoji} {decision}</span>;
 }
 
+// ── Data Health Box (transparent status of data sources, plain English) ──────
+function DataHealthBox({stock,optionsLoading,optionsLive}){
+  const items=[
+    {label:"Price",          state:stock.priceLive?"ok":"fail", okText:"is live",       failText:"is not loading"},
+    {label:"Option prices",  state:optionsLoading?"loading":(optionsLive?"ok":"fail"), okText:"are live",      failText:"are not ready yet", loadingText:"are loading…"},
+    {label:"Chart reading",  state:stock.chartLive?"ok":"fail", okText:"is ready",      failText:"is not ready yet"}
+  ];
+  return(
+    <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:12,padding:14}}>
+      <div style={{fontSize:11,color:C.text2,fontFamily:"'DM Mono',monospace",letterSpacing:2,marginBottom:10}}>📡 DATA STATUS</div>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {items.map((it,i)=>{
+          const c=it.state==="loading"?C.amber:it.state==="ok"?C.green:C.amber;
+          const text=it.state==="loading"?(it.loadingText||"is loading…"):it.state==="ok"?it.okText:it.failText;
+          return(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:10}}>
+              <span style={{width:9,height:9,borderRadius:"50%",background:c,boxShadow:`0 0 6px ${c}80`,flexShrink:0,animation:it.state==="loading"?"pulse 1.4s infinite":"none"}}/>
+              <span style={{fontSize:13,color:C.text}}>{it.label} {text}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Stock Card (scanner) ──────────────────────────────────────────────────────
 function StockCard({stock,scoreData,onClick}){
   const dc=decisionColor(scoreData.decision);
@@ -959,6 +1022,9 @@ function StockDetail({stock,scoreData,onClose,onLogTrade}){
             <Chip label={scoreData.expiration} color={C.gold} size={11}/>
           </div>
         </div>
+
+        {/* Data Health */}
+        <DataHealthBox stock={stock} optionsLoading={optionsLoading} optionsLive={!!optionsData?.hasRealOptions}/>
 
         {/* Score breakdown */}
         <div style={card}>
