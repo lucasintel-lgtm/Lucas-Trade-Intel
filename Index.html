@@ -380,6 +380,17 @@ function scoreStock(d,spySignal,qqqSignal){
     }
   }
 
+  // 7. CONTINUOUS VARIATION (0–6 pts) — breaks ties so the ranking spreads out
+  // Distance above/below EMA20 contributes a smooth bonus
+  if(d.price&&ema20&&ema20>0){
+    const distPct=Math.abs((d.price-ema20)/ema20)*100;
+    score+=Math.min(3,distPct*0.4);
+  }
+  // MACD histogram magnitude — stronger momentum gets a small extra nudge
+  if(d.macdHist!=null){
+    score+=Math.min(3,Math.abs(d.macdHist)*1.5);
+  }
+
   // Final direction
   if(bullPoints>bearPoints+1) direction="BULLISH";
   else if(bearPoints>bullPoints+1) direction="BEARISH";
@@ -545,17 +556,19 @@ function makeFinalDecision(stockScoreData,tradeScoreData){
   return{decision:"WAIT",reason:"Watching"};
 }
 
-// Confidence display — never HIGH if liquidity is bad or reward is weak
+// Confidence display — HIGH requires both scores strong, real options data, and zero warnings.
 function combinedConfidence(stockScoreData,tradeScoreData){
   const stockScore=stockScoreData.stockScore||stockScoreData.score||0;
   const tradeScore=tradeScoreData?.score||0;
   const hardFails=tradeScoreData?.hardFails||[];
+  const tradeWarnings=tradeScoreData?.warnings||[];
+  const stockWarnings=stockScoreData.warnings||[];
   // Any hard fail kills confidence
   if(hardFails.length>0) return "Low";
-  // No trade data yet — fall back to stock-only confidence
-  if(!tradeScoreData) return stockScoreData.confidence||"Low";
-  // Both must be strong for High
-  if(stockScore>=85&&tradeScore>=80) return "High";
+  // No trade data → never HIGH (real options data is required)
+  if(!tradeScoreData) return stockScore>=70?"Medium":"Low";
+  // Both scores strong + zero warnings = HIGH; otherwise Medium or Low
+  if(stockScore>=85&&tradeScore>=80&&tradeWarnings.length===0&&stockWarnings.length===0) return "High";
   if(stockScore>=70&&tradeScore>=70) return "Medium";
   return "Low";
 }
@@ -1065,9 +1078,14 @@ function StockDetail({stock,scoreData,onClose,onLogTrade}){
   const [optionsData,setOptionsData]=useState(null);
   const [optionsLoading,setOptionsLoading]=useState(false);
 
-  // Load real options data from Tradier when detail opens
+  // Load real options data from Tradier when detail opens.
+  // If the scanner already pre-fetched it (TRADE candidates), use that cached copy.
   useEffect(()=>{
     if(scoreData.decision==="SKIP") return;
+    if(stock.prefetchedOptions){
+      setOptionsData(stock.prefetchedOptions);
+      return;
+    }
     setOptionsLoading(true);
     enrichWithOptions(stock.ticker,stock.price,scoreData.direction).then(d=>{
       setOptionsData(d);
@@ -1616,13 +1634,70 @@ function App(){
   const fetchAndScore=useCallback(async()=>{
     setLoading(true);
     const data=await loadAllStocks(customTickers,(d,t,c)=>setLoadProg({done:d,total:t,current:c}));
-    setStocks(data);
     const spy=data.find(s=>s.ticker==="SPY");
     const qqq=data.find(s=>s.ticker==="QQQ");
     const spySig=getMarketSignal(spy);
     const qqqSig=getMarketSignal(qqq);
     const map={};
     data.forEach(s=>{map[s.ticker]=scoreStock(s,spySig,qqqSig);});
+
+    // STRICT TRADE APPROVAL — pre-fetch options for top stock-score candidates and verify trade quality.
+    // A ticker can ONLY be labeled TRADE if real option data exists AND trade score >= 70 AND no hard fails.
+    const candidates=data
+      .filter(s=>map[s.ticker]?.decision==="TRADE")
+      .sort((a,b)=>map[b.ticker].stockScore-map[a.ticker].stockScore)
+      .slice(0,20);
+    for(let i=0;i<candidates.length;i++){
+      const stock=candidates[i];
+      setLoadProg({done:i+1,total:candidates.length,current:`Verifying ${stock.ticker} option trade…`});
+      const sd=map[stock.ticker];
+      let approvedAsTrade=false;
+      try{
+        const options=await enrichWithOptions(stock.ticker,stock.price,sd.direction);
+        if(options){
+          stock.prefetchedOptions=options;
+          const spread=sd.direction==="BULLISH"
+            ?(sd.expiration.includes("7")?options.weeklyCallSpread:options.monthlyCallSpread)
+            :(sd.expiration.includes("7")?options.weeklyPutSpread:options.monthlyPutSpread);
+          if(spread){
+            const ts=calcTradeScore(spread,stock);
+            sd.tradeScoreData=ts;
+            if(ts.hardFails.length>0){
+              sd.decision="SKIP";sd.section="skip";
+              sd.strategy=`SKIP — ${ts.hardFails[0]}`;sd.confidence="Low";
+            } else if(ts.score>=70){
+              const cleanReadout=ts.warnings.length===0&&sd.warnings.length===0;
+              sd.confidence=(sd.stockScore>=85&&ts.score>=80&&cleanReadout)?"High":"Medium";
+              sd.tradeScore=ts.score;
+              approvedAsTrade=true;
+            } else {
+              sd.decision="WAIT";sd.section="wait";
+              sd.strategy=`WAIT — Stock looks good, trade quality borderline (trade score ${ts.score})`;
+              sd.confidence="Low";
+            }
+          }
+        }
+      }catch{}
+      // Without confirmed real option data + clean trade score, downgrade to WAIT
+      if(!approvedAsTrade&&sd.decision==="TRADE"){
+        sd.decision="WAIT";sd.section="wait";
+        sd.strategy="WAIT — STOCK LOOKS GOOD, TRADE NEEDS REAL OPTION DATA";
+        sd.confidence="Low";
+      }
+      if(i<candidates.length-1) await new Promise(r=>setTimeout(r,200));
+    }
+
+    // Any remaining TRADE that didn't get a trade score also downgrades to WAIT
+    Object.keys(map).forEach(t=>{
+      const sd=map[t];
+      if(sd.decision==="TRADE"&&!sd.tradeScoreData){
+        sd.decision="WAIT";sd.section="wait";
+        sd.strategy="WAIT — STOCK LOOKS GOOD, TRADE NEEDS REAL OPTION DATA";
+        sd.confidence="Low";
+      }
+    });
+
+    setStocks(data);
     setScoreMap(map);
     setLastUpdated(new Date());
     setLoading(false);
@@ -1673,7 +1748,6 @@ function App(){
     for(const s of skipList){
       if(promoted>=need) break;
       const sd=scoreMap[s.ticker];
-      // Don't promote earnings-risk skips — those are hard skips
       if(sd.earnDays>=7){
         sd.decision="WAIT";
         sd.section="wait";
@@ -1707,7 +1781,6 @@ function App(){
             <span style={{fontSize:14}}>⟳</span> Refresh
           </button>
         </div>
-        {/* Market mood */}
         <div style={{display:"flex",gap:6,marginBottom:5}}>
           {[
             ["TRADE",tradeCount,C.green],
@@ -1724,7 +1797,6 @@ function App(){
         {lastUpdated&&<div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace"}}><span style={{width:6,height:6,borderRadius:"50%",background:liveCount>0?C.green:C.text3,display:"inline-block",marginRight:4,verticalAlign:"middle"}}/>{lastUpdated.toLocaleTimeString()} · {liveCount} Tradier live feeds</div>}
       </div>
 
-      {/* Nav */}
       <div style={{display:"flex",borderBottom:`1px solid ${C.border}`,background:C.bg,position:"sticky",top:108,zIndex:49}}>
         {NAVS.map(n=>(
           <button key={n.id} onClick={()=>setTab(n.id)} style={{flex:1,padding:"11px 8px",border:"none",cursor:"pointer",background:"transparent",borderBottom:tab===n.id?`2px solid ${C.gold}`:"2px solid transparent",color:tab===n.id?C.goldLt:C.text2,fontSize:12,fontWeight:tab===n.id?600:400,transition:"all 0.15s"}}>
@@ -1733,17 +1805,14 @@ function App(){
         ))}
       </div>
 
-      {/* ── SCANNER ── */}
       {tab==="scanner"&&(
         <div style={{padding:16}}>
-          {/* Filters */}
           <div style={{display:"flex",gap:5,overflowX:"auto",paddingBottom:6,marginBottom:14}}>
             {["All","AI & Chips","AI Software","Quantum","Space & LEO","Nuclear","Energy","EV & Battery","Commodities","Macro ETFs","Crypto","Custom"].map(f=>(
               <button key={f} style={fBtn(filter===f)} onClick={()=>setFilter(f)}>{f}</button>
             ))}
           </div>
 
-          {/* Market Mood Banner */}
           {stocks.find(s=>s.ticker==="SPY")&&(()=>{
             const spy=stocks.find(s=>s.ticker==="SPY");
             const qqq=stocks.find(s=>s.ticker==="QQQ");
@@ -1765,7 +1834,6 @@ function App(){
             );
           })()}
 
-          {/* Sections */}
           <SectionCard title="BEST WEEKLY CALL DEBIT SPREADS" color={C.green} emoji="📈" stocks={weeklyCall} scoreMap={scoreMap} onClick={handleStockClick}/>
           <SectionCard title="BEST MONTHLY CALL DEBIT SPREADS" color={C.green} emoji="📅" stocks={monthlyCall} scoreMap={scoreMap} onClick={handleStockClick}/>
           <SectionCard title="BEST WEEKLY PUT DEBIT SPREADS" color={C.red} emoji="📉" stocks={weeklyPut} scoreMap={scoreMap} onClick={handleStockClick}/>
@@ -1781,7 +1849,6 @@ function App(){
             </div>
           )}
 
-          {/* Add Ticker */}
           <div style={card}>
             <div style={{padding:"10px 16px",borderBottom:`1px solid ${C.border}`,fontSize:11,color:C.text2,letterSpacing:2,fontFamily:"'DM Mono',monospace"}}>+ ADD TICKER</div>
             <div style={{padding:12,display:"flex",gap:8}}>
@@ -1801,7 +1868,6 @@ function App(){
         </div>
       )}
 
-      {/* ── AFTER HOURS PICKS ── */}
       {tab==="picks"&&(
         <div style={{padding:16}}>
           <div style={{background:"rgba(59,130,246,0.06)",border:`1px solid rgba(59,130,246,0.2)`,borderRadius:12,padding:14,marginBottom:14,fontSize:13,color:C.text2,lineHeight:1.7}}>
@@ -1832,7 +1898,6 @@ function App(){
         </div>
       )}
 
-      {/* ── TRACKER ── */}
       {tab==="tracker"&&(
         <TradeTrackerTab trades={trades} onUpdateTrade={handleUpdateTrade} onDeleteTrade={handleDeleteTrade}/>
       )}
