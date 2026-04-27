@@ -330,14 +330,16 @@ function scoreStock(d,spySignal,qqqSignal){
   else if(iv<70){score+=6;warnings.push(`IV rank at ${iv.toFixed(0)}% — options getting expensive, use spreads not naked options`);}
   else{score+=0;warnings.push(`IV rank at ${iv.toFixed(0)}% — options very expensive, debit spreads lose value quickly, consider waiting`);}
 
-  // 5. MARKET CONFIRMATION (10 pts)
+  // 5. MARKET CONFIRMATION (10 pts) — market should influence, not dominate
   const bullBias=bullPoints>bearPoints;
   const bearBias=bearPoints>bullPoints;
+  const marketMixed=(spySignal==="neutral"||qqqSignal==="neutral"||spySignal!==qqqSignal);
   if(bullBias&&spySignal==="bull"&&qqqSignal==="bull"){score+=10;reasons.push("Market (SPY + QQQ) confirms bullish direction");}
   else if(bearBias&&spySignal==="bear"&&qqqSignal==="bear"){score+=10;reasons.push("Market (SPY + QQQ) confirms bearish direction");}
-  else if(bullBias&&(spySignal==="bull"||qqqSignal==="bull")){score+=6;reasons.push("Market partially supports bullish direction");}
-  else if(bearBias&&(spySignal==="bear"||qqqSignal==="bear")){score+=6;reasons.push("Market partially supports bearish direction");}
-  else{score+=2;warnings.push("Market direction disagrees with this setup — lower confidence");}
+  else if(bullBias&&(spySignal==="bull"||qqqSignal==="bull")){score+=7;reasons.push("Market partially supports bullish direction");}
+  else if(bearBias&&(spySignal==="bear"||qqqSignal==="bear")){score+=7;reasons.push("Market partially supports bearish direction");}
+  else if(marketMixed){score+=5;reasons.push("Market is mixed — neutral influence");}
+  else{score+=3;warnings.push("Market direction disagrees with this setup — lower confidence");}
 
   // 6. EARNINGS RISK — auto skip
   const earnDays=d.earningsDays||999;
@@ -367,27 +369,48 @@ function scoreStock(d,spySignal,qqqSignal){
   score=Math.min(100,Math.max(0,Math.round(score)));
 
   // Decision logic
+  // Critical indicator data missing — should land in WAIT, never SKIP
+  const dataMissing=(d.ema20==null||d.ema50==null||d.macdHist==null);
+  // Market confirms direction (at least one of SPY/QQQ matches the bias)
+  const marketConfirms=(direction==="BULLISH"&&(spySignal==="bull"||qqqSignal==="bull"))||
+                       (direction==="BEARISH"&&(spySignal==="bear"||qqqSignal==="bear"));
   let decision,strategy,expiration,confidence;
-  if(earnDays<7){decision="SKIP";strategy="No Trade";expiration="N/A";confidence="Low";}
-  else if(score>=70&&direction!=="NEUTRAL"){
+  // HARD SKIP — earnings risk only
+  if(earnDays<7){
+    decision="SKIP";strategy="No Trade — Earnings Risk";expiration="N/A";confidence="Low";
+  }
+  // DATA CHECK — incomplete indicator data, parked in WAIT for the user to verify
+  else if(dataMissing){
+    decision="WAIT";strategy="DATA CHECK REQUIRED";expiration="21–45 DTE";confidence="Low";
+    warnings.push("Some indicator data missing — verify the chart on your broker before deciding");
+  }
+  // TRADE — high score AND clear direction AND market confirms direction
+  else if(score>=70&&direction!=="NEUTRAL"&&marketConfirms){
     decision="TRADE";
     strategy=direction==="BULLISH"?"Call Debit Spread":"Put Debit Spread";
     expiration=absChange>5?"21–45 DTE":score>=85?"7–14 DTE":"21–45 DTE";
     confidence=score>=85?"High":"Medium";
-  } else if(score>=45&&direction!=="NEUTRAL"){
+  }
+  // WAIT — score 40+ but missing one TRADE requirement (direction, market, etc.)
+  else if(score>=40){
     decision="WAIT";
-    strategy=direction==="BULLISH"?"Call Debit Spread (wait for entry)":"Put Debit Spread (wait for entry)";
+    if(direction==="NEUTRAL") strategy="Direction unclear — watch for confirmation";
+    else if(score>=70&&!marketConfirms) strategy=direction==="BULLISH"?"Call Debit Spread (market not confirming)":"Put Debit Spread (market not confirming)";
+    else strategy=direction==="BULLISH"?"Call Debit Spread (wait for entry)":"Put Debit Spread (wait for entry)";
     expiration="21–45 DTE";
     confidence="Low";
-  } else {
-    decision="SKIP";
-    strategy="No Trade";
-    expiration="N/A";
-    confidence="Low";
+  }
+  // SKIP — weak setup, score below 40
+  else {
+    decision="SKIP";strategy="No Trade — Weak Setup";expiration="N/A";confidence="Low";
   }
 
-  // Override to WAIT if too extended
-  if(absChange>8&&decision==="TRADE"){decision="WAIT";warnings.push("Do not chase this move — wait for price to settle");}
+  // Override to WAIT if too extended (don't chase)
+  if(absChange>8&&decision==="TRADE"){
+    decision="WAIT";
+    strategy=strategy+" (don't chase — wait for pullback)";
+    warnings.push("Do not chase this move — wait for price to settle");
+  }
 
   // DTE category for sections
   let section="skip";
@@ -401,14 +424,18 @@ function scoreStock(d,spySignal,qqqSignal){
 }
 
 // ── Market signal helper ──────────────────────────────────────────────────────
+// Only counts votes when data is actually present. Missing data ≠ a bearish vote.
 function getMarketSignal(stock){
   if(!stock) return "neutral";
   const{ema20,ema50,price,macdHist}=stock;
-  let bull=0,bear=0;
-  if(ema20&&price>ema20)bull++;else bear++;
-  if(ema50&&price>ema50)bull++;else bear++;
-  if(macdHist>0)bull++;else bear++;
-  return bull>bear?"bull":bear>bull?"bear":"neutral";
+  let bull=0,bear=0,votes=0;
+  if(ema20!=null&&price!=null){votes++;if(price>ema20)bull++;else bear++;}
+  if(ema50!=null&&price!=null){votes++;if(price>ema50)bull++;else bear++;}
+  if(macdHist!=null){votes++;if(macdHist>0)bull++;else bear++;}
+  if(votes<2) return "neutral";
+  if(bull>bear+1) return "bull";
+  if(bear>bull+1) return "bear";
+  return "neutral";
 }
 
 // ── Spread construction guidance ──────────────────────────────────────────────
@@ -1398,8 +1425,27 @@ function App(){
   const monthlyCall=bySection("monthlyCall");
   const weeklyPut=bySection("weeklyPut");
   const monthlyPut=bySection("monthlyPut");
-  const waitList=bySection("wait");
-  const skipList=bySection("skip");
+  let waitList=bySection("wait");
+  let skipList=bySection("skip");
+  // Scanner is a ranking tool — promote top non-earnings-risk SKIPs into WAIT so the
+  // scanner is never empty. Keeps at least 10 setups visible to the user.
+  if(waitList.length<10&&skipList.length>0){
+    const need=Math.min(10-waitList.length,skipList.length);
+    let promoted=0;
+    for(const s of skipList){
+      if(promoted>=need) break;
+      const sd=scoreMap[s.ticker];
+      // Don't promote earnings-risk skips — those are hard skips
+      if(sd.earnDays>=7){
+        sd.decision="WAIT";
+        sd.section="wait";
+        sd.strategy="Borderline — monitor only (low score)";
+        promoted++;
+      }
+    }
+    waitList=bySection("wait");
+    skipList=bySection("skip");
+  }
 
   const tradeCount=weeklyCall.length+monthlyCall.length+weeklyPut.length+monthlyPut.length;
   const liveCount=stocks.filter(s=>s.live).length;
@@ -1486,7 +1532,7 @@ function App(){
           <SectionCard title="BEST MONTHLY CALL DEBIT SPREADS" color={C.green} emoji="📅" stocks={monthlyCall} scoreMap={scoreMap} onClick={handleStockClick}/>
           <SectionCard title="BEST WEEKLY PUT DEBIT SPREADS" color={C.red} emoji="📉" stocks={weeklyPut} scoreMap={scoreMap} onClick={handleStockClick}/>
           <SectionCard title="BEST MONTHLY PUT DEBIT SPREADS" color={C.red} emoji="🗓" stocks={monthlyPut} scoreMap={scoreMap} onClick={handleStockClick}/>
-          <SectionCard title="WAIT — GOOD SETUP, NOT YET" color={C.amber} emoji="⏳" stocks={waitList} scoreMap={scoreMap} onClick={handleStockClick} defaultCollapsed={true}/>
+          <SectionCard title="WAIT — RANKED SETUPS TO WATCH" color={C.amber} emoji="⏳" stocks={waitList} scoreMap={scoreMap} onClick={handleStockClick} defaultCollapsed={tradeCount>0&&waitList.length>20}/>
           <SectionCard title="AVOID / BAD SETUP" color={C.text3} emoji="✗" stocks={skipList} scoreMap={scoreMap} onClick={handleStockClick} defaultCollapsed={true}/>
 
           {tradeCount===0&&waitList.length===0&&(
