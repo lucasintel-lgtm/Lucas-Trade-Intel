@@ -62,22 +62,6 @@ const WATCHLIST = {
 };
 const ALL_TICKERS = Object.values(WATCHLIST).flat();
 
-const COMPANY_NAMES = {
-  NVDA:"Nvidia",AMD:"AMD",AAPL:"Apple",MSFT:"Microsoft",META:"Meta",
-  GOOGL:"Alphabet (Google)",TSLA:"Tesla",TSM:"Taiwan Semi",SMCI:"Super Micro",
-  AMZN:"Amazon",ORCL:"Oracle",CRM:"Salesforce",PLTR:"Palantir",ARM:"ARM Holdings",
-  AVGO:"Broadcom",MRVL:"Marvell Tech",INTC:"Intel",QCOM:"Qualcomm",
-  SOUN:"SoundHound AI",BBAI:"BigBear.ai",IONQ:"IonQ",RGTI:"Rigetti",
-  AI:"C3.ai",HOOD:"Robinhood",
-  XOM:"ExxonMobil",CVX:"Chevron",OXY:"Occidental",SLB:"SLB Energy",
-  FSLR:"First Solar",NEE:"NextEra Energy",HAL:"Halliburton",
-  MPC:"Marathon Petroleum",VLO:"Valero Energy",DVN:"Devon Energy",
-  QQQ:"Invesco QQQ (Nasdaq)",SPY:"S&P 500 ETF",XLE:"Energy ETF",
-  SOXX:"Semiconductor ETF",ARKK:"ARK Innovation ETF",BOTZ:"Robotics ETF",
-  AIQ:"AI & Tech ETF",SMH:"VanEck Semi ETF",GLD:"Gold ETF",USO:"Oil ETF"
-};
-function getCompanyName(ticker){ return COMPANY_NAMES[ticker]||ticker; }
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function mockStock(ticker){
   const seed=ticker.split("").reduce((a,c)=>a+c.charCodeAt(0),0);
@@ -139,97 +123,31 @@ function getSupportResistance(highs,lows,current){
   return{support:parseFloat(support.toFixed(2)),resistance:parseFloat(resistance.toFixed(2))};
 }
 
-// ── New comprehensive signal + confidence system ───────────────────────────────
-// Returns direction (BULLISH/BEARISH/NEUTRAL) AND confidence (STRONG/MODERATE/WEAK)
-// based on all available chart data, price movement, and sentiment
-function getSignalAndConfidence(d){
-  let bullPoints=0, bearPoints=0;
-  const reasons=[];
-
-  // 1. Price vs 50-day trend (strong weight)
-  if(d.ma50){
-    if(d.price>d.ma50){ bullPoints+=2; reasons.push({bull:true,txt:"Price above 50-day trend"}); }
-    else{ bearPoints+=2; reasons.push({bull:false,txt:"Price below 50-day trend"}); }
-  }
-  // 2. Price vs 200-day trend (strong weight — long term direction)
-  if(d.ma200){
-    if(d.price>d.ma200){ bullPoints+=2; reasons.push({bull:true,txt:"Price above 200-day trend"}); }
-    else{ bearPoints+=2; reasons.push({bull:false,txt:"Price below 200-day trend"}); }
-  }
-  // 3. MACD momentum crossover
-  if(d.macdHist!=null){
-    if(d.macdHist>0){ bullPoints+=2; reasons.push({bull:true,txt:"Buying momentum building"}); }
-    else{ bearPoints+=2; reasons.push({bull:false,txt:"Selling momentum building"}); }
-  }
-  // 4. RSI — overbought/oversold
-  if(d.rsi){
-    if(d.rsi<30){ bullPoints+=2; reasons.push({bull:true,txt:"Oversold — potential bounce"}); }
-    else if(d.rsi>70){ bearPoints+=2; reasons.push({bull:false,txt:"Overbought — potential pullback"}); }
-    else if(d.rsi>=45&&d.rsi<=65){ bullPoints+=1; reasons.push({bull:true,txt:"RSI in healthy range"}); }
-  }
-  // 5. Today's price movement
-  if(d.change>1.5){ bullPoints+=1; reasons.push({bull:true,txt:"Strong up move today"}); }
-  else if(d.change<-1.5){ bearPoints+=1; reasons.push({bull:false,txt:"Strong down move today"}); }
-  // 6. Intraday momentum (where price closed in day's range)
-  if(d.momentum>70){ bullPoints+=1; reasons.push({bull:true,txt:"Closed near day's high"}); }
-  else if(d.momentum<30){ bearPoints+=1; reasons.push({bull:false,txt:"Closed near day's low"}); }
-  // 7. Bollinger Band position
-  if(d.bbUpper&&d.bbLower){
-    const bbRange=d.bbUpper-d.bbLower;
-    const bbPos=bbRange>0?(d.price-d.bbLower)/bbRange:0.5;
-    if(bbPos<0.2){ bullPoints+=1; reasons.push({bull:true,txt:"Near bottom of price range"}); }
-    else if(bbPos>0.8){ bearPoints+=1; reasons.push({bull:false,txt:"Near top of price range"}); }
-  }
-  // 8. Price vs support/resistance
-  if(d.support&&d.resistance){
-    const mid=(d.support+d.resistance)/2;
-    if(d.price>mid){ bullPoints+=1; reasons.push({bull:true,txt:"Price above midpoint"}); }
-    else{ bearPoints+=1; reasons.push({bull:false,txt:"Price below midpoint"}); }
-  }
-  // 9. News sentiment
-  if(d.sentiment==="bullish"){ bullPoints+=1; reasons.push({bull:true,txt:"Positive news sentiment"}); }
-  else if(d.sentiment==="bearish"){ bearPoints+=1; reasons.push({bull:false,txt:"Negative news sentiment"}); }
-  // 10. Volume spike adds conviction
-  if(d.volumeSpike){
-    if(bullPoints>bearPoints){ bullPoints+=1; reasons.push({bull:true,txt:"Unusual volume confirms move"}); }
-    else if(bearPoints>bullPoints){ bearPoints+=1; reasons.push({bull:false,txt:"Unusual volume confirms drop"}); }
-  }
-
-  const total=bullPoints+bearPoints;
-  const diff=Math.abs(bullPoints-bearPoints);
-  const isBull=bullPoints>bearPoints;
-
-  // Direction
-  let label,color,emoji;
-  if(diff<2||total===0){label="NEUTRAL";color="#8899bb";emoji="◆";}
-  else if(isBull){label="BULLISH";color="#00c896";emoji="▲";}
-  else{label="BEARISH";color="#f0465a";emoji="▼";}
-
-  // Confidence — how many signals agree vs disagree
-  const agreePct=total>0?Math.round((Math.max(bullPoints,bearPoints)/total)*100):50;
-  let confidence,confColor,confScore;
-  if(agreePct>=75&&diff>=4){confidence="STRONG";confColor="#00c896";confScore=3;}
-  else if(agreePct>=60&&diff>=2){confidence="MODERATE";confColor="#f59e0b";confScore=2;}
-  else{confidence="WEAK";confColor="#f0465a";confScore=1;}
-
-  // Earnings upcoming = always reduce confidence (too much uncertainty)
-  if(d.earningsDays<14&&d.earningsDays<999){
-    if(confidence==="STRONG") confidence="MODERATE";
-    confScore=Math.max(1,confScore-1);
-  }
-
-  return{label,color,emoji,confidence,confColor,confScore,bullPoints,bearPoints,reasons,agreePct};
+function getRiskScore(d){
+  let s=50;
+  if(d.momentum>65) s+=12; else if(d.momentum<35) s-=12;
+  if(d.ivRank>70) s+=10; else if(d.ivRank<30) s-=5;
+  if(d.earningsDays<14&&d.earningsDays<999) s+=20;
+  if(d.rsi>70) s+=10; else if(d.rsi<30) s-=10;
+  if(d.sentiment==="bullish") s+=8; else if(d.sentiment==="bearish") s-=8;
+  if(d.macdHist>0) s-=5; else if(d.macdHist<0) s+=5;
+  const price=d.price;
+  if(d.ma200&&price<d.ma200) s+=8;
+  return Math.min(100,Math.max(0,Math.round(s)));
 }
-
-// Convenience wrappers so existing code still works
-function getSignal(d){ return getSignalAndConfidence(d); }
-function getConfidence(d){ const r=getSignalAndConfidence(d); return{confidence:r.confidence,confColor:r.confColor,confScore:r.confScore}; }
-// Sort score: higher = show first. Bullish Strong=6, Bearish Strong=5, Bull Mod=4, Bear Mod=3, Bull Weak=2, Bear Weak=1, Neutral=0
-function getSortScore(d){
-  const {label,confidence,confScore}=getSignalAndConfidence(d);
-  if(label==="NEUTRAL") return 0;
-  const base=label==="BULLISH"?confScore*2:confScore*2-1;
-  return base;
+function getRiskLabel(s){
+  if(s>=70) return{label:"HIGH",color:"#f0465a"};
+  if(s>=45) return{label:"MED",color:"#f59e0b"};
+  return{label:"LOW",color:"#00c896"};
+}
+function getSignal(d){
+  const aboveMA50=d.ma50&&d.price>d.ma50;
+  const aboveMA200=d.ma200&&d.price>d.ma200;
+  const macdBull=d.macdHist>0;
+  const score=(d.momentum>65?1:d.momentum<35?-1:0)+(d.change>0.5?1:d.change<-0.5?-1:0)+(aboveMA50?1:-1)+(macdBull?1:-1);
+  if(score>=2) return{label:"BULLISH",color:"#00c896",emoji:"▲",short:"BUL"};
+  if(score<=-2) return{label:"BEARISH",color:"#f0465a",emoji:"▼",short:"BEA"};
+  return{label:"NEUTRAL",color:"#8899bb",emoji:"◆",short:"NEU"};
 }
 function getIVLabel(r){
   if(r>70) return{label:"IV HIGH — sell premium",color:"#f59e0b"};
@@ -354,51 +272,6 @@ async function analyzeIdea(prompt){
   );
 }
 
-async function getChartAnalysis(data){
-  try{
-    const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:800,
-        system:`You are a friendly trading coach explaining a stock chart to someone who is brand new to trading. 
-NEVER use technical jargon without explaining it in plain English right away.
-NEVER say "MA50", "MA200", "MACD", "RSI", "Bollinger Bands" without immediately explaining what it means in simple terms.
-Write like you're texting a smart friend who knows nothing about trading. Keep it conversational, honest, and clear.
-End with a simple bottom line: is this a good time to buy calls, buy puts, or wait?
-Respond with plain text only — no JSON, no bullet points, no headers. Just 4-6 natural flowing sentences.`,
-        messages:[{role:"user",content:`Give me a plain English chart reading for ${data.ticker}. Here is the data:
-
-Current price: $${data.price?.toFixed(2)}
-Today's change: ${data.change?.toFixed(2)}%
-Recent momentum: ${data.momentum?.toFixed(0)}/100 (100 = very strong upward move today, 0 = very weak)
-
-50-day trend line (average price over last 50 days): $${data.ma50||"not enough data"}
-200-day trend line (average price over last 200 days): $${data.ma200||"not enough data"}
-Price vs 50-day trend: ${data.ma50?(data.price>data.ma50?"ABOVE (bullish sign)":"BELOW (bearish sign)"):"unknown"}
-Price vs 200-day trend: ${data.ma200?(data.price>data.ma200?"ABOVE (bullish long term)":"BELOW (bearish long term)"):"unknown"}
-
-Momentum crossover signal: ${data.macdHist!=null?(data.macdHist>0?"BULLISH (buying momentum building)":"BEARISH (selling momentum building)"):"not available"}
-
-Price trading range (Bollinger Bands):
-- Upper boundary: $${data.bbUpper||"N/A"} (if price is near here, stock may be getting expensive)
-- Middle: $${data.bbMid||"N/A"}
-- Lower boundary: $${data.bbLower||"N/A"} (if price is near here, stock may be cheap/oversold)
-- Current price position: ${data.bbUpper&&data.bbLower?(data.price>data.bbUpper?"Near the TOP of range — possibly overbought":data.price<data.bbLower?"Near the BOTTOM of range — possibly oversold":"In the MIDDLE of range — neutral"):"unknown"}
-
-Strength indicator (RSI): ${data.rsi?.toFixed(0)}/100 ${data.rsi>70?"(above 70 = stock may be overbought, could pull back)":data.rsi<30?"(below 30 = stock may be oversold, could bounce)":"(between 30-70 = healthy range)"}
-
-Key price levels:
-- Support (where buyers usually step in): $${data.support||"N/A"}
-- Resistance (where sellers usually step in): $${data.resistance||"N/A"}
-
-News sentiment: ${data.sentiment} 
-Volume spike today: ${data.volumeSpike?"YES — unusual activity, something may be happening":"No"}
-Earnings coming up: ${data.earningsDays<999?`In ${data.earningsDays} days — this is important for options!`:"Not imminent"}
-
-Explain all of this in plain English like talking to a friend. No jargon. What does the chart say about where this stock might go?`}]})});
-    const d=await r.json();
-    return d.content?.find(b=>b.type==="text")?.text||"Could not generate analysis.";
-  }catch{return "Could not connect to analysis engine. Check your connection.";}
-}
-
 async function genPicks(stocks){
   const data=stocks.filter(s=>s.live).slice(0,15).map(s=>
     `${s.ticker}: $${s.price?.toFixed(2)} chg=${s.change?.toFixed(2)}% mom=${s.momentum?.toFixed(0)} rsi=${s.rsi} iv=${s.ivRank?.toFixed(0)}% sent=${s.sentiment} ma50=${s.ma50||"N/A"} ma200=${s.ma200||"N/A"} macd=${s.macdHist||"N/A"} bb=${s.bbLower||"N/A"}-${s.bbUpper||"N/A"} sup=${s.support||"N/A"} res=${s.resistance||"N/A"} earn=${s.earningsDays<999?s.earningsDays+"d":"N/A"} volSpike=${s.volumeSpike}`
@@ -490,7 +363,8 @@ function MATag({price,ma,label}){
 }
 
 function StockRow({data,onClick}){
-  const sig=getSignalAndConfidence(data);
+  const sig=getSignal(data);
+  const risk=getRiskLabel(getRiskScore(data));
   const ivl=getIVLabel(data.ivRank);
   return(
     <div onClick={()=>onClick(data)}
@@ -509,10 +383,8 @@ function StockRow({data,onClick}){
                 <LiveDot live={data.live}/>
                 {data.volumeSpike&&<Chip label="⚡ VOL" color={C.amber}/>}
               </div>
-              <div style={{fontSize:11,color:C.text3,marginBottom:5}}>{getCompanyName(data.ticker)}</div>
-              <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                 <Chip label={`${sig.emoji} ${sig.label}`} color={sig.color}/>
-                <Chip label={sig.confidence} color={sig.confColor}/>
                 <Chip label={`${getSentEmoji(data.sentiment)} ${data.sentiment.toUpperCase()}`} color={getSentColor(data.sentiment)}/>
               </div>
             </div>
@@ -545,10 +417,8 @@ function StockRow({data,onClick}){
           </span>
         </div>
         <div style={{textAlign:"right"}}>
-          <div style={{fontSize:9,color:C.text3,marginBottom:3,fontFamily:"'DM Mono',monospace",letterSpacing:1}}>SIGNALS</div>
-          <span style={{fontSize:10,color:C.green,fontFamily:"'DM Mono',monospace"}}>{sig.bullPoints}↑</span>
-          <span style={{fontSize:10,color:C.text3,fontFamily:"'DM Mono',monospace"}}> / </span>
-          <span style={{fontSize:10,color:C.red,fontFamily:"'DM Mono',monospace"}}>{sig.bearPoints}↓</span>
+          <div style={{fontSize:9,color:C.text3,marginBottom:3,fontFamily:"'DM Mono',monospace",letterSpacing:1}}>RISK</div>
+          <Chip label={`${getRiskScore(data)} ${risk.label}`} color={risk.color} size={9}/>
         </div>
       </div>
       {(data.ma50||data.ma200)&&(
@@ -564,15 +434,10 @@ function StockRow({data,onClick}){
 }
 
 function StockDetail({data,onClose}){
-  const sig=getSignalAndConfidence(data);
+  const sig=getSignal(data);
   const iv=getIVLabel(data.ivRank);
-  const [chartAnalysis,setChartAnalysis]=useState(null);
-  const [chartLoading,setChartLoading]=useState(false);
-  const handleChartAnalysis=async()=>{
-    setChartLoading(true);setChartAnalysis(null);
-    const result=await getChartAnalysis(data);
-    setChartAnalysis(result);setChartLoading(false);
-  };
+  const riskScore=getRiskScore(data);
+  const risk=getRiskLabel(riskScore);
   return(
     <div style={{position:"fixed",inset:0,background:C.bg,zIndex:200,display:"flex",flexDirection:"column",overflowY:"auto",animation:"fadeUp 0.2s ease"}}>
       {/* Header */}
@@ -583,12 +448,11 @@ function StockDetail({data,onClose}){
         <div style={{display:"flex",alignItems:"center",gap:14}}>
           <TickerLogo ticker={data.ticker} size={52}/>
           <div>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
               <span style={{fontSize:22,fontWeight:600,color:C.text}}>{data.ticker}</span>
               <LiveDot live={data.live}/>
               <Chip label={sig.label} color={sig.color}/>
             </div>
-            <div style={{fontSize:12,color:C.text3,marginBottom:4}}>{getCompanyName(data.ticker)}</div>
             <div style={{fontSize:28,fontWeight:300,color:C.text,fontFamily:"'DM Serif Display',serif"}}>${data.price?.toFixed(2)}</div>
             <div style={{fontSize:13,color:data.change>=0?C.green:C.red,fontFamily:"'DM Mono',monospace"}}>{data.change>=0?"+":""}{data.change?.toFixed(2)}% today</div>
           </div>
@@ -725,35 +589,19 @@ function StockDetail({data,onClose}){
           </div>
         </div>
 
-        {/* Confidence + IV */}
+        {/* IV + Risk */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <div style={{...card,marginBottom:0,padding:14}}>
-            <div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:6}}>SIGNAL</div>
-            <div style={{fontSize:20,fontWeight:500,color:sig.color,fontFamily:"'DM Serif Display',serif",marginBottom:4}}>{sig.emoji} {sig.label}</div>
-            <Chip label={sig.confidence} color={sig.confColor} size={11}/>
-            <div style={{fontSize:10,color:C.text3,marginTop:6}}>{sig.bullPoints} bull · {sig.bearPoints} bear signals</div>
-          </div>
-          <div style={{...card,marginBottom:0,padding:14}}>
-            <div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:6}}>IV RANK {iv.ivLive?"● LIVE":""}</div>
-            <div style={{fontSize:20,fontWeight:500,color:getIVLabel(data.ivRank).color,fontFamily:"'DM Serif Display',serif",marginBottom:4}}>{data.ivRank?.toFixed(0)}%</div>
+            <div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:6}}>IV RANK {data.ivLive?"● LIVE":""}</div>
+            <div style={{fontSize:22,fontWeight:500,color:getIVLabel(data.ivRank).color,fontFamily:"'DM Serif Display',serif",marginBottom:4}}>{data.ivRank?.toFixed(0)}%</div>
             <div style={{fontSize:11,color:C.text2,lineHeight:1.4}}>{getIVLabel(data.ivRank).label}</div>
           </div>
-        </div>
-
-        {/* Signal breakdown */}
-        {sig.reasons?.length>0&&(
-          <div style={{...card,marginBottom:0}}>
-            <div style={cardHdr}>📋 Why {sig.label}? ({sig.agreePct}% signals agree)</div>
-            <div style={{padding:"10px 16px",display:"flex",flexDirection:"column",gap:6}}>
-              {sig.reasons.map((r,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:8,background:r.bull?"rgba(0,200,150,0.06)":"rgba(240,70,90,0.06)"}}>
-                  <span style={{fontSize:12,color:r.bull?C.green:C.red,flexShrink:0}}>{r.bull?"▲":"▼"}</span>
-                  <span style={{fontSize:12,color:C.text2}}>{r.txt}</span>
-                </div>
-              ))}
-            </div>
+          <div style={{...card,marginBottom:0,padding:14}}>
+            <div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:6}}>RISK SCORE</div>
+            <div style={{fontSize:22,fontWeight:500,color:getRiskLabel(getRiskScore(data)).color,fontFamily:"'DM Serif Display',serif",marginBottom:4}}>{getRiskScore(data)}<span style={{fontSize:13,color:C.text3}}>/100</span></div>
+            <Chip label={getRiskLabel(getRiskScore(data)).label} color={getRiskLabel(getRiskScore(data)).color} size={10}/>
           </div>
-        )}
+        </div>
 
         {/* Earnings warning */}
         {data.earningsDays<21&&data.earningsDays<999&&(
@@ -768,31 +616,6 @@ function StockDetail({data,onClose}){
             <div style={{fontSize:12,color:C.text2}}>Current volume is significantly above the 20-day average. Watch for a potential breakout or reversal.</div>
           </div>
         )}
-
-        {/* ── CHART ANALYSIS BUTTON ── */}
-        <div style={{background:"linear-gradient(135deg,rgba(201,168,76,0.08),rgba(201,168,76,0.03))",border:"1px solid rgba(201,168,76,0.25)",borderRadius:14,padding:16}}>
-          <div style={{fontSize:13,fontWeight:600,color:"#f0d080",marginBottom:6}}>💬 Plain English Chart Reading</div>
-          <div style={{fontSize:12,color:"#8899bb",lineHeight:1.6,marginBottom:12}}>Tap below and I will explain what the chart is saying in plain English — no jargon, no confusing terms. Just honest advice on whether now is a good time to buy calls, buy puts, or wait.</div>
-          {!chartAnalysis&&!chartLoading&&(
-            <button onClick={handleChartAnalysis} style={{background:"linear-gradient(135deg,#c9a84c,#f0d080,#c9a84c)",border:"none",borderRadius:10,padding:"12px",color:"#0a0f1e",fontWeight:700,fontFamily:"DM Sans,sans-serif",fontSize:13,cursor:"pointer",letterSpacing:0.5,width:"100%",boxShadow:"0 4px 20px rgba(201,168,76,0.3)"}}>
-              💬 Read the Chart for Me
-            </button>
-          )}
-          {chartLoading&&(
-            <div style={{textAlign:"center",padding:"20px 0",color:"#c9a84c",fontFamily:"DM Mono,monospace",fontSize:12,letterSpacing:1}}>
-              <div style={{fontSize:22,display:"inline-block",animation:"spin 1s linear infinite",marginBottom:8}}>◌</div>
-              <div>Reading the chart...</div>
-            </div>
-          )}
-          {chartAnalysis&&(
-            <div style={{animation:"fadeUp 0.3s ease"}}>
-              <div style={{fontSize:13,color:"#e8edf5",lineHeight:1.8,marginBottom:14}}>{chartAnalysis}</div>
-              <button onClick={handleChartAnalysis} style={{background:"transparent",border:"1px solid rgba(201,168,76,0.3)",borderRadius:10,padding:"9px 16px",color:"#c9a84c",fontFamily:"DM Sans,sans-serif",fontSize:12,cursor:"pointer",width:"100%"}}>
-                ⟳ Refresh Analysis
-              </button>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -857,7 +680,6 @@ function EarningsCalendar({earnings,stocks}){
         <div style={{flex:1,minWidth:0}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
             <span style={{fontSize:15,fontWeight:600,color:C.text}}>{e.ticker}</span>
-            <span style={{fontSize:11,color:C.text3,display:"block",marginTop:1}}>{getCompanyName(e.ticker)}</span>
             <span style={{fontSize:12,color:urg,fontFamily:"'DM Mono',monospace",fontWeight:600}}>{e.daysAway===0?"TODAY":e.daysAway===1?"TOMORROW":`${e.daysAway}d`}</span>
           </div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
@@ -916,7 +738,7 @@ function App(){
   const [loading,setLoading]=useState(true);
   const [loadProg,setLoadProg]=useState({done:0,total:0,current:""});
   const [filter,setFilter]=useState("All");
-  const [sortBy,setSortBy]=useState("topPicks");
+  const [sortBy,setSortBy]=useState("signal");
   const [selected,setSelected]=useState(null);
   const [customTickers,setCustomTickers]=useState(()=>{try{return JSON.parse(localStorage.getItem("lti_custom")||"[]");}catch{return[];}});
   const [addTicker,setAddTicker]=useState("");
@@ -961,6 +783,7 @@ function App(){
   const bearish=stocks.filter(s=>getSignal(s).label==="BEARISH").length;
   const liveCount=stocks.filter(s=>s.live).length;
 
+  const scoreForSort=s=>{const sig=getSignal(s);return sig.label==="BULLISH"?3:sig.label==="BEARISH"?2:1;};
   const filtered=stocks
     .filter(s=>{
       if(filter==="All") return true;
@@ -968,23 +791,12 @@ function App(){
       return WATCHLIST[filter]?.includes(s.ticker);
     })
     .sort((a,b)=>{
-      if(sortBy==="topPicks") return getSortScore(b)-getSortScore(a);
-      if(sortBy==="bullish"){
-        const sa=getSignalAndConfidence(a),sb=getSignalAndConfidence(b);
-        if(sa.label==="BULLISH"&&sb.label!=="BULLISH") return -1;
-        if(sb.label==="BULLISH"&&sa.label!=="BULLISH") return 1;
-        return sb.confScore-sa.confScore;
-      }
-      if(sortBy==="bearish"){
-        const sa=getSignalAndConfidence(a),sb=getSignalAndConfidence(b);
-        if(sa.label==="BEARISH"&&sb.label!=="BEARISH") return -1;
-        if(sb.label==="BEARISH"&&sa.label!=="BEARISH") return 1;
-        return sb.confScore-sa.confScore;
-      }
+      if(sortBy==="signal") return scoreForSort(b)-scoreForSort(a);
       if(sortBy==="change") return b.change-a.change;
       if(sortBy==="rsi") return b.rsi-a.rsi;
       if(sortBy==="iv") return b.ivRank-a.ivRank;
-      return getSortScore(b)-getSortScore(a);
+      if(sortBy==="risk") return getRiskScore(b)-getRiskScore(a);
+      return b.momentum-a.momentum;
     });
 
   const handleAnalyze=async()=>{
@@ -1062,7 +874,7 @@ Analyze honestly. Disagree if data doesn't support it.`;
           </div>
           <div style={{display:"flex",gap:6,marginBottom:14,alignItems:"center",overflowX:"auto"}}>
             <span style={{fontSize:11,color:C.text3,flexShrink:0,fontFamily:"'DM Mono',monospace"}}>Sort:</span>
-            {[["topPicks","⭐ Top Picks"],["bullish","▲ Bullish"],["bearish","▼ Bearish"],["change","% Chg"],["rsi","RSI"],["iv","IV"]].map(([k,l])=>(
+            {[["signal","Signal"],["change","% Chg"],["rsi","RSI"],["iv","IV"],["risk","Risk"]].map(([k,l])=>(
               <button key={k} style={fBtn(sortBy===k)} onClick={()=>setSortBy(k)}>{l}</button>
             ))}
           </div>
@@ -1261,7 +1073,6 @@ Analyze honestly. Disagree if data doesn't support it.`;
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                           <div style={{display:"flex",gap:8,alignItems:"center"}}>
                             <span style={{fontSize:16,fontWeight:600,color:C.text}}>{pos.ticker}</span>
-                            <span style={{fontSize:11,color:C.text3,display:"block",marginTop:1}}>{getCompanyName(pos.ticker)}</span>
                             <Chip label={pos.type} color={pos.type==="CALL"?C.green:C.red} size={11}/>
                             <LiveDot live={sd.live}/>
                           </div>
