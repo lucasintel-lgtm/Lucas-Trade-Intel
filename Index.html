@@ -13,37 +13,18 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
   <style>
-    :root {
-      --bg:        #0a0f1e;
-      --bg2:       #111827;
-      --bg3:       #1a2235;
-      --border:    rgba(255,255,255,0.07);
-      --border2:   rgba(255,255,255,0.12);
-      --gold:      #c9a84c;
-      --gold-lt:   #f0d080;
-      --text:      #e8edf5;
-      --text2:     #8899bb;
-      --text3:     #4a5a7a;
-      --green:     #00c896;
-      --red:       #f0465a;
-      --amber:     #f59e0b;
-      --blue:      #3b82f6;
-      --font:      'DM Sans', sans-serif;
-      --font-serif:'DM Serif Display', serif;
-      --font-mono: 'DM Mono', monospace;
-    }
-    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-    body { background:var(--bg); font-family:var(--font); color:var(--text); overflow-x:hidden; }
-    input,textarea,button,select { font-family:var(--font); }
-    ::-webkit-scrollbar { width:3px; height:3px; }
-    ::-webkit-scrollbar-track { background:transparent; }
-    ::-webkit-scrollbar-thumb { background:rgba(201,168,76,0.3); border-radius:999px; }
-    input::placeholder,textarea::placeholder { color:var(--text3); }
-    textarea { resize:vertical; }
-    @keyframes spin  { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
-    @keyframes fadeUp{ from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-    @keyframes glow  { 0%,100%{box-shadow:0 0 12px rgba(201,168,76,0.3)} 50%{box-shadow:0 0 24px rgba(201,168,76,0.6)} }
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{background:#0a0f1e;font-family:'DM Sans',sans-serif;color:#e8edf5;overflow-x:hidden}
+    input,textarea,button,select{font-family:'DM Sans',sans-serif}
+    ::-webkit-scrollbar{width:3px;height:3px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:rgba(201,168,76,0.3);border-radius:999px}
+    input::placeholder,textarea::placeholder{color:#4a5a7a}
+    textarea{resize:vertical}
+    @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.35}}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes glow{0%,100%{box-shadow:0 0 12px rgba(201,168,76,0.3)}50%{box-shadow:0 0 24px rgba(201,168,76,0.6)}}
   </style>
 </head>
 <body>
@@ -51,99 +32,55 @@
 <script type="text/babel">
 const {useState,useEffect,useCallback,useRef} = React;
 
+// ── API Keys ──────────────────────────────────────────────────────────────────
 const FINNHUB_KEY    = "d7n9ufhr01qppri44j10d7n9ufhr01qppri44j1g";
 const FLASHALPHA_KEY = "lnPcLNxQez9tYGjPSEbLn4UlmX4ekbGAJg2BCbFc";
 
+// ── Watchlist ─────────────────────────────────────────────────────────────────
 const WATCHLIST = {
-  "AI & Tech":    ["NVDA","AMD","AAPL","MSFT","META","GOOGL","TSLA","TSM","SMCI","AMZN","ORCL","CRM","PLTR","ARM","AVGO","MRVL","INTC","QCOM","ASML","AMAT","LRCX","KLAC","MU"],
-  "AI Software":  ["SOUN","BBAI","AI","NOW","SNOW","DDOG","NET","ZS","PATH","HOOD","GTLB","MNDY"],
-  "Quantum":      ["IONQ","RGTI","QUBT","QBTS","ARQQ","IBM"],
-  "Photonics":    ["LITE","COHR","AAOI","IIVI","NPAB"],
-  "LEO & Space":  ["RKLB","ASTS","LUNR","SPCE","MNTS","RDW"],
-  "Robotics":     ["ISRG","PATH","TER","ABBV","IRON","NVDA"],
-  "Nuclear":      ["CEG","CCJ","NNE","SMR","OKLO","UEC","DNN","VST","ETR"],
-  "Energy":       ["XOM","CVX","OXY","SLB","FSLR","NEE","HAL","MPC","VLO","DVN","GEV","ETN","PWR","EQIX","DLR"],
-  "EV & Battery": ["TSLA","RIVN","LCID","QS","ENVX","CHPT"],
-  "Commodities":  ["GLD","SLV","USO","UNG","COPX","MP","UUUU","LTHM","GDX","IAU"],
-  "Macro & ETFs": ["SPY","QQQ","DIA","IWM","TLT","EEM","SOXX","SMH","ARKK","BOTZ","AIQ","XLE","MSTR","COIN"],
-  "Minerals & Mining":["NEM","GOLD","AEM","WPM","PAAS","HL","AG"]
+  "AI & Chips":   ["NVDA","AMD","AVGO","TSM","ARM","ASML","AMAT","MU","SMCI","QCOM","INTC","MRVL","KLAC","LRCX"],
+  "AI Software":  ["MSFT","GOOGL","META","AMZN","PLTR","CRM","NOW","ORCL","SNOW","DDOG","NET","SOUN","AI","BBAI"],
+  "Quantum":      ["IONQ","RGTI","QUBT","QBTS","IBM"],
+  "Space & LEO":  ["RKLB","ASTS","LUNR"],
+  "Nuclear":      ["CEG","CCJ","OKLO","SMR","NNE","VST","UEC"],
+  "Energy":       ["XOM","CVX","OXY","FSLR","NEE","SLB","DVN","GEV","PWR"],
+  "EV & Battery": ["TSLA","RIVN","QS","ENVX"],
+  "Commodities":  ["GLD","SLV","USO","GDX","COPX","MP","NEM","WPM"],
+  "Macro ETFs":   ["SPY","QQQ","IWM","TLT","SOXX","SMH","ARKK","XLE"],
+  "Crypto":       ["MSTR","COIN","HOOD"],
+  "Robotics":     ["ISRG","PATH","TER"],
+  "Photonics":    ["LITE","COHR","AAOI"]
 };
-const ALL_TICKERS = [...new Set(Object.values(WATCHLIST).flat())];
+const ALL_TICKERS=[...new Set(Object.values(WATCHLIST).flat())];
+const TICKER_SECTOR={};
+Object.entries(WATCHLIST).forEach(([s,ts])=>ts.forEach(t=>{if(!TICKER_SECTOR[t])TICKER_SECTOR[t]=s;}));
 
-// Sector label for each ticker
-const TICKER_SECTOR = {};
-Object.entries(WATCHLIST).forEach(([sector,tickers])=>tickers.forEach(t=>{if(!TICKER_SECTOR[t]) TICKER_SECTOR[t]=sector;}));
-
-const COMPANY_NAMES = {
-  // AI & Chips
-  NVDA:"Nvidia",AMD:"AMD",AAPL:"Apple",MSFT:"Microsoft",META:"Meta",
-  GOOGL:"Alphabet",TSLA:"Tesla",TSM:"Taiwan Semi",SMCI:"Super Micro",
-  AMZN:"Amazon",ORCL:"Oracle",CRM:"Salesforce",PLTR:"Palantir",ARM:"ARM Holdings",
-  AVGO:"Broadcom",MRVL:"Marvell Tech",INTC:"Intel",QCOM:"Qualcomm",
-  ASML:"ASML Holding",AMAT:"Applied Materials",LRCX:"Lam Research",
-  KLAC:"KLA Corp",MU:"Micron Technology",
-  // AI Software
-  SOUN:"SoundHound AI",BBAI:"BigBear.ai",AI:"C3.ai",NOW:"ServiceNow",
-  SNOW:"Snowflake",DDOG:"Datadog",NET:"Cloudflare",ZS:"Zscaler",
-  PATH:"UiPath",HOOD:"Robinhood",GTLB:"GitLab",MNDY:"Monday.com",
-  // Quantum
-  IONQ:"IonQ",RGTI:"Rigetti Computing",QUBT:"Quantum Computing Inc",
-  QBTS:"D-Wave Quantum",ARQQ:"Arqit Quantum",IBM:"IBM",
-  // Photonics
-  LITE:"Lumentum",COHR:"Coherent Corp",AAOI:"Applied Optoelectronics",
-  IIVI:"II-VI (Coherent)",NPAB:"NovaBay Pharma",
-  // LEO & Space
+const COMPANY_NAMES={
+  NVDA:"Nvidia",AMD:"AMD",AVGO:"Broadcom",TSM:"Taiwan Semi",ARM:"ARM Holdings",
+  ASML:"ASML Holding",AMAT:"Applied Materials",MU:"Micron",SMCI:"Super Micro",
+  QCOM:"Qualcomm",INTC:"Intel",MRVL:"Marvell Tech",KLAC:"KLA Corp",LRCX:"Lam Research",
+  MSFT:"Microsoft",GOOGL:"Alphabet",META:"Meta",AMZN:"Amazon",PLTR:"Palantir",
+  CRM:"Salesforce",NOW:"ServiceNow",ORCL:"Oracle",SNOW:"Snowflake",DDOG:"Datadog",
+  NET:"Cloudflare",SOUN:"SoundHound AI",AI:"C3.ai",BBAI:"BigBear.ai",
+  IONQ:"IonQ",RGTI:"Rigetti",QUBT:"Quantum Computing",QBTS:"D-Wave",IBM:"IBM",
   RKLB:"Rocket Lab",ASTS:"AST SpaceMobile",LUNR:"Intuitive Machines",
-  SPCE:"Virgin Galactic",MNTS:"Momentus",RDW:"Redwire Corp",
-  // Robotics
-  ISRG:"Intuitive Surgical",TER:"Teradyne",ABBV:"AbbVie",IRON:"Disc Medicine",
-  // Nuclear
-  CEG:"Constellation Energy",CCJ:"Cameco",NNE:"Nano Nuclear Energy",
-  SMR:"NuScale Power",OKLO:"Oklo",UEC:"Uranium Energy",
-  DNN:"Denison Mines",VST:"Vistra Energy",ETR:"Entergy",
-  // Energy & Infrastructure
-  XOM:"ExxonMobil",CVX:"Chevron",OXY:"Occidental",SLB:"SLB Energy",
-  FSLR:"First Solar",NEE:"NextEra Energy",HAL:"Halliburton",
-  MPC:"Marathon Petroleum",VLO:"Valero Energy",DVN:"Devon Energy",
-  GEV:"GE Vernova",ETN:"Eaton Corp",PWR:"Quanta Services",
-  EQIX:"Equinix (Data Centers)",DLR:"Digital Realty",
-  // EV & Battery
-  RIVN:"Rivian",LCID:"Lucid Motors",QS:"QuantumScape",
-  ENVX:"Enovix",CHPT:"ChargePoint",
-  // Commodities
-  GLD:"Gold ETF (SPDR)",SLV:"Silver ETF (iShares)",USO:"Oil ETF",
-  UNG:"Natural Gas ETF",COPX:"Copper Miners ETF",MP:"MP Materials",
-  UUUU:"Energy Fuels (Uranium)",LTHM:"Livent (Lithium)",
-  GDX:"Gold Miners ETF",IAU:"iShares Gold Trust",
-  // Macro & ETFs
-  SPY:"S&P 500 ETF",QQQ:"Nasdaq 100 ETF",DIA:"Dow Jones ETF",
-  IWM:"Russell 2000 ETF",TLT:"20yr Treasury ETF",EEM:"Emerging Markets ETF",
-  SOXX:"Semiconductor ETF",SMH:"VanEck Semi ETF",ARKK:"ARK Innovation ETF",
-  BOTZ:"Robotics ETF",AIQ:"AI & Tech ETF",XLE:"Energy ETF",
-  MSTR:"MicroStrategy",COIN:"Coinbase",
-  // Minerals & Mining
-  NEM:"Newmont (Gold)",GOLD:"Barrick Gold",AEM:"Agnico Eagle",
-  WPM:"Wheaton Precious Metals",PAAS:"Pan American Silver",
-  HL:"Hecla Mining",AG:"First Majestic Silver"
+  CEG:"Constellation Energy",CCJ:"Cameco",OKLO:"Oklo",SMR:"NuScale",NNE:"Nano Nuclear",
+  VST:"Vistra Energy",UEC:"Uranium Energy",
+  XOM:"ExxonMobil",CVX:"Chevron",OXY:"Occidental",FSLR:"First Solar",
+  NEE:"NextEra Energy",SLB:"SLB Energy",DVN:"Devon Energy",GEV:"GE Vernova",PWR:"Quanta Services",
+  TSLA:"Tesla",RIVN:"Rivian",QS:"QuantumScape",ENVX:"Enovix",
+  GLD:"Gold ETF",SLV:"Silver ETF",USO:"Oil ETF",GDX:"Gold Miners ETF",
+  COPX:"Copper ETF",MP:"MP Materials",NEM:"Newmont",WPM:"Wheaton Precious",
+  SPY:"S&P 500 ETF",QQQ:"Nasdaq 100 ETF",IWM:"Russell 2000 ETF",TLT:"20yr Treasury ETF",
+  SOXX:"Semiconductor ETF",SMH:"VanEck Semi ETF",ARKK:"ARK Innovation ETF",XLE:"Energy ETF",
+  MSTR:"MicroStrategy",COIN:"Coinbase",HOOD:"Robinhood",
+  ISRG:"Intuitive Surgical",PATH:"UiPath",TER:"Teradyne",
+  LITE:"Lumentum",COHR:"Coherent Corp",AAOI:"Applied Optoelectronics"
 };
-function getCompanyName(ticker){ return COMPANY_NAMES[ticker]||ticker; }
-function getSector(ticker){ return TICKER_SECTOR[ticker]||"Custom"; }
+const getCompanyName=t=>COMPANY_NAMES[t]||t;
+const getSector=t=>TICKER_SECTOR[t]||"Custom";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function mockStock(ticker){
-  const seed=ticker.split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-  const rng=s=>((Math.sin(s)*10000)%1+1)/2;
-  return{ticker,live:false,price:20+rng(seed)*480,change:(rng(seed*2)-0.45)*8,
-    volume:Math.floor(rng(seed*3)*50e6+1e6),momentum:rng(seed*4)*100,
-    ivRank:rng(seed*6)*100,earningsDays:Math.floor(rng(seed*7)*60),
-    rsi:30+rng(seed*8)*50,sentiment:"neutral",sentimentScore:50,
-    ma50:null,ma200:null,macd:null,macdSignal:null,macdHist:null,
-    bbUpper:null,bbLower:null,bbMid:null,support:null,resistance:null,
-    open:null,high:null,low:null,prevClose:null,ivLive:false,
-    avgVolume:Math.floor(rng(seed*9)*30e6+1e6),volumeSpike:false,
-    newsHeadlines:[],earningsDate:null,earningsTime:null};
-}
-
+// ── Math helpers ──────────────────────────────────────────────────────────────
 function calcEMA(arr,period){
   if(!arr||arr.length<period) return null;
   const k=2/(period+1);
@@ -151,148 +88,219 @@ function calcEMA(arr,period){
   for(let i=period;i<arr.length;i++) ema=arr[i]*k+ema*(1-k);
   return ema;
 }
-
 function calcRSI(closes,period=14){
   if(!closes||closes.length<period+1) return 50;
-  let gains=0,losses=0;
+  let g=0,l=0;
   for(let i=closes.length-period;i<closes.length;i++){
     const d=closes[i]-closes[i-1];
-    if(d>0) gains+=d; else losses+=Math.abs(d);
+    if(d>0)g+=d;else l+=Math.abs(d);
   }
-  const ag=gains/period,al=losses/period;
+  const ag=g/period,al=l/period;
   return al===0?100:Math.round(100-(100/(1+ag/al)));
 }
-
 function calcMACD(closes){
-  if(!closes||closes.length<26) return{macd:null,signal:null,hist:null};
-  const ema12=calcEMA(closes,12),ema26=calcEMA(closes,26);
-  if(!ema12||!ema26) return{macd:null,signal:null,hist:null};
-  const macd=ema12-ema26;
-  // simplified signal
-  const signal=macd*0.9;
+  if(!closes||closes.length<26) return{hist:null};
+  const e12=calcEMA(closes,12),e26=calcEMA(closes,26);
+  if(!e12||!e26) return{hist:null};
+  const macd=e12-e26,signal=macd*0.9;
   return{macd:parseFloat(macd.toFixed(3)),signal:parseFloat(signal.toFixed(3)),hist:parseFloat((macd-signal).toFixed(3))};
 }
-
-function calcBollinger(closes,period=20){
-  if(!closes||closes.length<period) return{upper:null,lower:null,mid:null};
-  const slice=closes.slice(-period);
-  const mid=slice.reduce((a,b)=>a+b,0)/period;
-  const std=Math.sqrt(slice.reduce((a,b)=>a+(b-mid)**2,0)/period);
+function calcBB(closes,p=20){
+  if(!closes||closes.length<p) return{upper:null,lower:null,mid:null};
+  const sl=closes.slice(-p),mid=sl.reduce((a,b)=>a+b,0)/p;
+  const std=Math.sqrt(sl.reduce((a,b)=>a+(b-mid)**2,0)/p);
   return{upper:parseFloat((mid+2*std).toFixed(2)),lower:parseFloat((mid-2*std).toFixed(2)),mid:parseFloat(mid.toFixed(2))};
 }
+function getDateStr(n){const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().split("T")[0];}
 
-function getSupportResistance(highs,lows,current){
-  if(!highs||!lows||highs.length<5) return{support:null,resistance:null};
-  const recentLows=lows.slice(-20).sort((a,b)=>a-b);
-  const recentHighs=highs.slice(-20).sort((a,b)=>b-a);
-  const support=recentLows.slice(0,3).reduce((a,b)=>a+b,0)/3;
-  const resistance=recentHighs.slice(0,3).reduce((a,b)=>a+b,0)/3;
-  return{support:parseFloat(support.toFixed(2)),resistance:parseFloat(resistance.toFixed(2))};
-}
-
-// ── New comprehensive signal + confidence system ───────────────────────────────
-// Returns direction (BULLISH/BEARISH/NEUTRAL) AND confidence (STRONG/MODERATE/WEAK)
-// based on all available chart data, price movement, and sentiment
-function getSignalAndConfidence(d){
-  let bullPoints=0, bearPoints=0;
+// ── Core scoring engine ───────────────────────────────────────────────────────
+function scoreStock(d,spySignal,qqqSignal){
+  // Returns a 0-100 options trade score with direction and recommendation
+  let score=0;
   const reasons=[];
+  const warnings=[];
+  let direction="NEUTRAL";
+  let bullPoints=0,bearPoints=0;
 
-  // 1. Price vs 50-day trend (strong weight)
-  if(d.ma50){
-    if(d.price>d.ma50){ bullPoints+=2; reasons.push({bull:true,txt:"Price above 50-day trend"}); }
-    else{ bearPoints+=2; reasons.push({bull:false,txt:"Price below 50-day trend"}); }
+  // 1. TREND STRENGTH (25 pts) — price vs EMA20 and EMA50
+  const ema20=d.ema20,ema50=d.ema50;
+  if(ema20&&ema50&&d.price){
+    if(d.price>ema20&&d.price>ema50&&ema20>ema50){bullPoints+=3;score+=25;reasons.push("Price above both trend lines — strong uptrend");}
+    else if(d.price>ema20&&d.price>ema50){bullPoints+=2;score+=18;reasons.push("Price above both trend lines");}
+    else if(d.price>ema20&&d.price<ema50){bullPoints+=1;bearPoints+=1;score+=10;reasons.push("Short-term uptrend but below long-term average");}
+    else if(d.price<ema20&&d.price<ema50&&ema20<ema50){bearPoints+=3;score+=25;reasons.push("Price below both trend lines — strong downtrend");}
+    else if(d.price<ema20&&d.price<ema50){bearPoints+=2;score+=18;reasons.push("Price below both trend lines");}
+    else{score+=8;}
   }
-  // 2. Price vs 200-day trend (strong weight — long term direction)
-  if(d.ma200){
-    if(d.price>d.ma200){ bullPoints+=2; reasons.push({bull:true,txt:"Price above 200-day trend"}); }
-    else{ bearPoints+=2; reasons.push({bull:false,txt:"Price below 200-day trend"}); }
-  }
-  // 3. MACD momentum crossover
+
+  // 2. MOMENTUM (20 pts) — MACD and daily change
   if(d.macdHist!=null){
-    if(d.macdHist>0){ bullPoints+=2; reasons.push({bull:true,txt:"Buying momentum building"}); }
-    else{ bearPoints+=2; reasons.push({bull:false,txt:"Selling momentum building"}); }
+    if(d.macdHist>0){bullPoints+=2;score+=15;reasons.push("Momentum is building upward");}
+    else{bearPoints+=2;score+=15;reasons.push("Momentum is fading downward");}
   }
-  // 4. RSI — overbought/oversold
-  if(d.rsi){
-    if(d.rsi<30){ bullPoints+=2; reasons.push({bull:true,txt:"Oversold — potential bounce"}); }
-    else if(d.rsi>70){ bearPoints+=2; reasons.push({bull:false,txt:"Overbought — potential pullback"}); }
-    else if(d.rsi>=45&&d.rsi<=65){ bullPoints+=1; reasons.push({bull:true,txt:"RSI in healthy range"}); }
-  }
-  // 5. Today's price movement
-  if(d.change>1.5){ bullPoints+=1; reasons.push({bull:true,txt:"Strong up move today"}); }
-  else if(d.change<-1.5){ bearPoints+=1; reasons.push({bull:false,txt:"Strong down move today"}); }
-  // 6. Intraday momentum (where price closed in day's range)
-  if(d.momentum>70){ bullPoints+=1; reasons.push({bull:true,txt:"Closed near day's high"}); }
-  else if(d.momentum<30){ bearPoints+=1; reasons.push({bull:false,txt:"Closed near day's low"}); }
-  // 7. Bollinger Band position
-  if(d.bbUpper&&d.bbLower){
-    const bbRange=d.bbUpper-d.bbLower;
-    const bbPos=bbRange>0?(d.price-d.bbLower)/bbRange:0.5;
-    if(bbPos<0.2){ bullPoints+=1; reasons.push({bull:true,txt:"Near bottom of price range"}); }
-    else if(bbPos>0.8){ bearPoints+=1; reasons.push({bull:false,txt:"Near top of price range"}); }
-  }
-  // 8. Price vs support/resistance
-  if(d.support&&d.resistance){
-    const mid=(d.support+d.resistance)/2;
-    if(d.price>mid){ bullPoints+=1; reasons.push({bull:true,txt:"Price above midpoint"}); }
-    else{ bearPoints+=1; reasons.push({bull:false,txt:"Price below midpoint"}); }
-  }
-  // 9. News sentiment
-  if(d.sentiment==="bullish"){ bullPoints+=1; reasons.push({bull:true,txt:"Positive news sentiment"}); }
-  else if(d.sentiment==="bearish"){ bearPoints+=1; reasons.push({bull:false,txt:"Negative news sentiment"}); }
-  // 10. Volume spike adds conviction
-  if(d.volumeSpike){
-    if(bullPoints>bearPoints){ bullPoints+=1; reasons.push({bull:true,txt:"Unusual volume confirms move"}); }
-    else if(bearPoints>bullPoints){ bearPoints+=1; reasons.push({bull:false,txt:"Unusual volume confirms drop"}); }
+  // Penalize huge same-day moves (chasing risk)
+  const absChange=Math.abs(d.change||0);
+  if(absChange>8){score-=10;warnings.push(`Already moved ${d.change?.toFixed(1)}% today — avoid chasing this move`);}
+  else if(absChange>5){score-=5;warnings.push(`Large move today (${d.change?.toFixed(1)}%) — wait for consolidation before entering`);}
+  else if(absChange<3&&absChange>0){score+=5;}
+
+  // 3. RSI — overextension (15 pts)
+  const rsi=d.rsi||50;
+  if(bullPoints>=bearPoints){
+    // Bullish bias — ideal RSI 45-65
+    if(rsi>=45&&rsi<=65){score+=15;reasons.push("RSI in ideal zone for bullish entry (not overbought)");}
+    else if(rsi>65&&rsi<=70){score+=8;warnings.push("RSI getting high — stock may be slightly stretched");}
+    else if(rsi>70){score+=0;warnings.push("RSI above 70 — overbought, avoid chasing, wait for pullback");}
+    else if(rsi<45&&rsi>=35){score+=10;reasons.push("RSI pulling back — could be a good dip entry");}
+    else{score+=5;warnings.push("RSI very low — may be oversold, confirm before going bullish");}
+  } else {
+    // Bearish bias — ideal RSI 35-55
+    if(rsi>=35&&rsi<=55){score+=15;reasons.push("RSI in ideal zone for bearish entry (not oversold)");}
+    else if(rsi<35&&rsi>=30){score+=8;warnings.push("RSI getting low — stock may be slightly oversold");}
+    else if(rsi<30){score+=0;warnings.push("RSI below 30 — oversold, avoid chasing down, wait for bounce");}
+    else if(rsi>55&&rsi<=65){score+=10;reasons.push("RSI elevated — may be rolling over, good for bearish plays");}
+    else{score+=5;}
   }
 
-  const total=bullPoints+bearPoints;
-  const diff=Math.abs(bullPoints-bearPoints);
-  const isBull=bullPoints>bearPoints;
+  // 4. IV RANK — options pricing (15 pts)
+  const iv=d.ivRank||50;
+  if(iv<30){score+=15;reasons.push("Options are cheap right now — good time to buy a spread");}
+  else if(iv<50){score+=12;reasons.push("Options pricing is normal — debit spreads are fairly priced");}
+  else if(iv<70){score+=6;warnings.push(`IV rank at ${iv.toFixed(0)}% — options getting expensive, use spreads not naked options`);}
+  else{score+=0;warnings.push(`IV rank at ${iv.toFixed(0)}% — options very expensive, debit spreads lose value quickly, consider waiting`);}
 
-  // Direction
-  let label,color,emoji;
-  if(diff<2||total===0){label="NEUTRAL";color="#8899bb";emoji="◆";}
-  else if(isBull){label="BULLISH";color="#00c896";emoji="▲";}
-  else{label="BEARISH";color="#f0465a";emoji="▼";}
+  // 5. MARKET CONFIRMATION (10 pts)
+  const bullBias=bullPoints>bearPoints;
+  const bearBias=bearPoints>bullPoints;
+  if(bullBias&&spySignal==="bull"&&qqqSignal==="bull"){score+=10;reasons.push("Market (SPY + QQQ) confirms bullish direction");}
+  else if(bearBias&&spySignal==="bear"&&qqqSignal==="bear"){score+=10;reasons.push("Market (SPY + QQQ) confirms bearish direction");}
+  else if(bullBias&&(spySignal==="bull"||qqqSignal==="bull")){score+=6;reasons.push("Market partially supports bullish direction");}
+  else if(bearBias&&(spySignal==="bear"||qqqSignal==="bear")){score+=6;reasons.push("Market partially supports bearish direction");}
+  else{score+=2;warnings.push("Market direction disagrees with this setup — lower confidence");}
 
-  // Confidence — how many signals agree vs disagree
-  const agreePct=total>0?Math.round((Math.max(bullPoints,bearPoints)/total)*100):50;
-  let confidence,confColor,confScore;
-  if(agreePct>=75&&diff>=4){confidence="STRONG";confColor="#00c896";confScore=3;}
-  else if(agreePct>=60&&diff>=2){confidence="MODERATE";confColor="#f59e0b";confScore=2;}
-  else{confidence="WEAK";confColor="#f0465a";confScore=1;}
+  // 6. EARNINGS RISK — auto skip
+  const earnDays=d.earningsDays||999;
+  if(earnDays<7){warnings.push(`⚠ EARNINGS IN ${earnDays} DAYS — extremely high risk, avoid unless this is an earnings play`);score-=20;}
+  else if(earnDays<21){warnings.push(`Earnings in ${earnDays} days — use shorter expiration or wait until after earnings`);}
+  else if(earnDays<45){warnings.push(`Earnings in ${earnDays} days — factor this into expiration choice`);}
 
-  // Earnings upcoming = always reduce confidence (too much uncertainty)
-  if(d.earningsDays<14&&d.earningsDays<999){
-    if(confidence==="STRONG") confidence="MODERATE";
-    confScore=Math.max(1,confScore-1);
+  // 7. SUPPORT/RESISTANCE context
+  if(d.support&&d.resistance&&d.price){
+    const distFromSupport=((d.price-d.support)/d.price)*100;
+    const distFromResistance=((d.resistance-d.price)/d.price)*100;
+    if(bullPoints>=bearPoints){
+      if(distFromSupport<3){score+=5;reasons.push("Price near support — good risk/reward for bullish entry");}
+      if(distFromResistance<3){score-=5;warnings.push("Price near resistance — limited upside room, not ideal for calls");}
+    } else {
+      if(distFromResistance<3){score+=5;reasons.push("Price near resistance — good risk/reward for bearish entry");}
+      if(distFromSupport<3){score-=5;warnings.push("Price near support — limited downside room, not ideal for puts");}
+    }
   }
 
-  return{label,color,emoji,confidence,confColor,confScore,bullPoints,bearPoints,reasons,agreePct};
+  // Final direction
+  if(bullPoints>bearPoints+1) direction="BULLISH";
+  else if(bearPoints>bullPoints+1) direction="BEARISH";
+  else direction="NEUTRAL";
+
+  // Final score cap
+  score=Math.min(100,Math.max(0,Math.round(score)));
+
+  // Decision logic
+  let decision,strategy,expiration,confidence;
+  if(earnDays<7){decision="SKIP";strategy="No Trade";expiration="N/A";confidence="Low";}
+  else if(score>=70&&direction!=="NEUTRAL"){
+    decision="TRADE";
+    strategy=direction==="BULLISH"?"Call Debit Spread":"Put Debit Spread";
+    expiration=absChange>5?"21–45 DTE":score>=85?"7–14 DTE":"21–45 DTE";
+    confidence=score>=85?"High":"Medium";
+  } else if(score>=45&&direction!=="NEUTRAL"){
+    decision="WAIT";
+    strategy=direction==="BULLISH"?"Call Debit Spread (wait for entry)":"Put Debit Spread (wait for entry)";
+    expiration="21–45 DTE";
+    confidence="Low";
+  } else {
+    decision="SKIP";
+    strategy="No Trade";
+    expiration="N/A";
+    confidence="Low";
+  }
+
+  // Override to WAIT if too extended
+  if(absChange>8&&decision==="TRADE"){decision="WAIT";warnings.push("Do not chase this move — wait for price to settle");}
+
+  // DTE category for sections
+  let section="skip";
+  if(decision==="TRADE"&&direction==="BULLISH"&&expiration.includes("7–14")) section="weeklyCall";
+  else if(decision==="TRADE"&&direction==="BULLISH") section="monthlyCall";
+  else if(decision==="TRADE"&&direction==="BEARISH"&&expiration.includes("7–14")) section="weeklyPut";
+  else if(decision==="TRADE"&&direction==="BEARISH") section="monthlyPut";
+  else if(decision==="WAIT") section="wait";
+
+  return{score,direction,decision,strategy,expiration,confidence,reasons,warnings,section,bullPoints,bearPoints,earnDays};
 }
 
-// Convenience wrappers so existing code still works
-function getSignal(d){ return getSignalAndConfidence(d); }
-function getConfidence(d){ const r=getSignalAndConfidence(d); return{confidence:r.confidence,confColor:r.confColor,confScore:r.confScore}; }
-// Sort score: higher = show first. Bullish Strong=6, Bearish Strong=5, Bull Mod=4, Bear Mod=3, Bull Weak=2, Bear Weak=1, Neutral=0
-function getSortScore(d){
-  const {label,confidence,confScore}=getSignalAndConfidence(d);
-  if(label==="NEUTRAL") return 0;
-  const base=label==="BULLISH"?confScore*2:confScore*2-1;
-  return base;
+// ── Market signal helper ──────────────────────────────────────────────────────
+function getMarketSignal(stock){
+  if(!stock) return "neutral";
+  const{ema20,ema50,price,macdHist}=stock;
+  let bull=0,bear=0;
+  if(ema20&&price>ema20)bull++;else bear++;
+  if(ema50&&price>ema50)bull++;else bear++;
+  if(macdHist>0)bull++;else bear++;
+  return bull>bear?"bull":bear>bull?"bear":"neutral";
 }
-function getIVLabel(r){
-  if(r>70) return{label:"IV HIGH — sell premium",color:"#f59e0b"};
-  if(r<30) return{label:"IV LOW — buy options",color:"#00c896"};
-  return{label:"IV NORMAL",color:"#8899bb"};
-}
-function getSentColor(s){ return s==="bullish"?"#00c896":s==="bearish"?"#f0465a":"#8899bb"; }
-function getSentEmoji(s){ return s==="bullish"?"↑":s==="bearish"?"↓":"→"; }
-function getDateStr(n){ const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().split("T")[0]; }
 
-// ── Finnhub ───────────────────────────────────────────────────────────────────
-async function fetchQuote(ticker){
+// ── Spread construction guidance ──────────────────────────────────────────────
+function getSpreadGuidance(d,scoreData){
+  const{direction,expiration,decision}=scoreData;
+  if(decision==="SKIP") return null;
+  const isBull=direction==="BULLISH";
+  const dte=expiration.includes("7")?10:expiration.includes("21")?30:45;
+  const price=d.price||100;
+
+  if(isBull){
+    const longStrike=(price*1.01).toFixed(0);
+    const shortStrike=(price*1.06).toFixed(0);
+    return{
+      type:"Call Debit Spread",
+      longLeg:`Buy $${longStrike} Call (look for ~0.50 delta)`,
+      shortLeg:`Sell $${shortStrike} Call (look for ~0.30 delta)`,
+      dte:`~${dte} DTE`,
+      maxLoss:"Premium paid (limited risk)",
+      target:"50–80% of max gain, or near resistance",
+      stop:"Exit if spread loses 40–50% of what you paid",
+      note:`Verify bid/ask spread is tight and open interest is high on your broker before entering`
+    };
+  } else {
+    const longStrike=(price*0.99).toFixed(0);
+    const shortStrike=(price*0.94).toFixed(0);
+    return{
+      type:"Put Debit Spread",
+      longLeg:`Buy $${longStrike} Put (look for ~0.50 delta)`,
+      shortLeg:`Sell $${shortStrike} Put (look for ~0.30 delta)`,
+      dte:`~${dte} DTE`,
+      maxLoss:"Premium paid (limited risk)",
+      target:"50–80% of max gain, or near support",
+      stop:"Exit if spread loses 40–50% of what you paid",
+      note:`Verify bid/ask spread is tight and open interest is high on your broker before entering`
+    };
+  }
+}
+
+// ── Fetch stock data ──────────────────────────────────────────────────────────
+function mockStock(ticker){
+  const seed=ticker.split("").reduce((a,c)=>a+c.charCodeAt(0),0);
+  const rng=s=>((Math.sin(s)*10000)%1+1)/2;
+  const price=20+rng(seed)*480;
+  return{ticker,live:false,price,change:(rng(seed*2)-0.45)*6,
+    rsi:35+rng(seed*3)*40,ema20:price*(0.95+rng(seed*4)*0.1),
+    ema50:price*(0.92+rng(seed*5)*0.1),macdHist:(rng(seed*6)-0.5)*2,
+    ivRank:20+rng(seed*7)*60,earningsDays:Math.floor(rng(seed*8)*60)+7,
+    support:price*0.93,resistance:price*1.07,bbUpper:price*1.05,bbLower:price*0.95,
+    open:null,high:null,low:null,prevClose:null,sentiment:"neutral",newsHeadlines:[]};
+}
+
+async function fetchStock(ticker){
   try{
     const [qR,eR,nR,cR]=await Promise.all([
       fetch(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_KEY}`),
@@ -303,48 +311,43 @@ async function fetchQuote(ticker){
     const q=await qR.json(),e=await eR.json(),news=await nR.json(),candles=await cR.json();
     if(!q.c||q.c===0) return null;
 
-    // earnings
-    let earningsDays=999,earningsDate=null,earningsTime=null;
+    let earningsDays=999;
     if(e.earningsCalendar?.length>0){
       const nx=e.earningsCalendar.find(x=>new Date(x.date)>=new Date());
-      if(nx){earningsDays=Math.round((new Date(nx.date)-new Date())/86400000);earningsDate=nx.date;earningsTime=nx.hour;}
+      if(nx) earningsDays=Math.round((new Date(nx.date)-new Date())/86400000);
     }
 
-    // sentiment
-    let bull=0,bear=0;const headlines=[];
+    let bull=0,bear=0;const newsHeadlines=[];
     if(Array.isArray(news)){
-      news.slice(0,10).forEach(n=>{
+      news.slice(0,8).forEach(n=>{
         const t=(n.headline||"").toLowerCase();
-        const b=["surge","jump","beat","rise","gain","growth","record","upgrade","strong","bullish","rally","soar"].some(w=>t.includes(w));
-        const bd=["fall","drop","miss","decline","loss","cut","downgrade","weak","bearish","crash","slump","disappoint"].some(w=>t.includes(w));
-        if(b) bull++;if(bd) bear++;
-        if(headlines.length<3) headlines.push({headline:n.headline,url:n.url,sentiment:b?"bullish":bd?"bearish":"neutral",source:n.source});
+        const b=["surge","jump","beat","rise","gain","upgrade","strong","bullish","rally"].some(w=>t.includes(w));
+        const bd=["fall","drop","miss","decline","loss","downgrade","weak","bearish","crash"].some(w=>t.includes(w));
+        if(b)bull++;if(bd)bear++;
+        if(newsHeadlines.length<3) newsHeadlines.push({headline:n.headline,sentiment:b?"bullish":bd?"bearish":"neutral",source:n.source});
       });
     }
     const sentiment=bull>bear?"bullish":bear>bull?"bearish":"neutral";
-    const sentimentScore=bull+bear>0?Math.round((bull/(bull+bear))*100):50;
 
-    // candle-based indicators
-    let rsi=50,ma50=null,ma200=null,macd=null,macdSignal=null,macdHist=null,bbUpper=null,bbLower=null,bbMid=null,support=null,resistance=null,avgVolume=null,volumeSpike=false;
+    let rsi=50,ema20=null,ema50=null,macdHist=null,bbUpper=null,bbLower=null,support=null,resistance=null;
     if(candles.s==="ok"&&candles.c?.length>=15){
-      const c=candles.c,h=candles.h,l=candles.l,v=candles.v;
+      const c=candles.c,h=candles.h,l=candles.l;
       rsi=calcRSI(c);
-      if(c.length>=50)  ma50=parseFloat(calcEMA(c,50).toFixed(2));
-      if(c.length>=200) ma200=parseFloat(calcEMA(c,200).toFixed(2));
-      const m=calcMACD(c);macd=m.macd;macdSignal=m.signal;macdHist=m.hist;
-      const bb=calcBollinger(c);bbUpper=bb.upper;bbLower=bb.lower;bbMid=bb.mid;
-      const sr=getSupportResistance(h,l,q.c);support=sr.support;resistance=sr.resistance;
-      if(v&&v.length>0){avgVolume=Math.round(v.slice(-20).reduce((a,b)=>a+b,0)/Math.min(20,v.length));volumeSpike=q.v?q.v>avgVolume*1.5:false;}
+      if(c.length>=20) ema20=parseFloat(calcEMA(c,20).toFixed(2));
+      if(c.length>=50) ema50=parseFloat(calcEMA(c,50).toFixed(2));
+      const m=calcMACD(c);macdHist=m.hist;
+      const bb=calcBB(c);bbUpper=bb.upper;bbLower=bb.lower;
+      if(h&&l&&h.length>=20){
+        const rH=h.slice(-20),rL=l.slice(-20);
+        support=parseFloat((rL.slice().sort((a,b)=>a-b).slice(0,3).reduce((a,b)=>a+b,0)/3).toFixed(2));
+        resistance=parseFloat((rH.slice().sort((a,b)=>b-a).slice(0,3).reduce((a,b)=>a+b,0)/3).toFixed(2));
+      }
     }
 
     const change=q.pc>0?((q.c-q.pc)/q.pc)*100:0;
-    const dayRange=(q.h||0)-(q.l||0);
-    const momentum=dayRange>0?Math.min(100,Math.max(0,((q.c-q.l)/dayRange)*100)):50;
-
-    return{ticker,live:true,ivLive:false,price:q.c,change,open:q.o,high:q.h,low:q.l,prevClose:q.pc,
-      volume:q.v,avgVolume,volumeSpike,momentum,ivRank:null,earningsDays,earningsDate,earningsTime,
-      rsi,sentiment,sentimentScore,newsHeadlines:headlines,
-      ma50,ma200,macd,macdSignal,macdHist,bbUpper,bbLower,bbMid,support,resistance};
+    return{ticker,live:true,price:q.c,change,open:q.o,high:q.h,low:q.l,prevClose:q.pc,
+      rsi,ema20,ema50,macdHist,bbUpper,bbLower,support,resistance,ivRank:null,
+      earningsDays,sentiment,newsHeadlines};
   }catch{return null;}
 }
 
@@ -354,32 +357,20 @@ async function fetchFlashIV(ticker){
     if(!r.ok) return null;
     const d=await r.json();
     const ivRank=d.iv_rank??d.ivRank??d.iv_percentile??null;
-    return ivRank!==null?{ivRank,iv:d.iv??null}:null;
+    return ivRank!==null?ivRank:null;
   }catch{return null;}
 }
 
-async function fetchEarnings(tickers){
-  try{
-    const r=await fetch(`https://finnhub.io/api/v1/calendar/earnings?from=${getDateStr(0)}&to=${getDateStr(21)}&token=${FINNHUB_KEY}`);
-    const d=await r.json();
-    if(!d.earningsCalendar) return[];
-    return d.earningsCalendar.filter(e=>tickers.includes(e.symbol)).map(e=>({
-      ticker:e.symbol,date:e.date,hour:e.hour,
-      daysAway:Math.round((new Date(e.date)-new Date())/86400000)
-    })).sort((a,b)=>a.daysAway-b.daysAway);
-  }catch{return[];}
-}
-
-async function loadAllStocks(extra,onProg){
-  const tickers=[...new Set([...ALL_TICKERS,...extra])];
+async function loadAllStocks(extraTickers,onProgress){
+  const tickers=[...new Set([...ALL_TICKERS,...extraTickers])];
   const results=[];let flashUsed=0;
   for(let i=0;i<tickers.length;i++){
     const t=tickers[i];
-    if(onProg) onProg(i+1,tickers.length,t);
-    let d=await fetchQuote(t)||mockStock(t);
+    if(onProgress) onProgress(i+1,tickers.length,t);
+    let d=await fetchStock(t)||mockStock(t);
     if(d.live&&flashUsed<5){
       const iv=await fetchFlashIV(t);
-      if(iv){d.ivRank=iv.ivRank;d.ivLive=true;flashUsed++;}
+      if(iv!==null){d.ivRank=iv;flashUsed++;}
     }
     if(d.ivRank===null){const s=t.split("").reduce((a,c)=>a+c.charCodeAt(0),0);d.ivRank=((Math.sin(s*6)*10000)%1+1)/2*100;}
     results.push(d);
@@ -388,263 +379,114 @@ async function loadAllStocks(extra,onProg){
   return results;
 }
 
-async function callClaude(sys,usr){
+// ── Claude API ────────────────────────────────────────────────────────────────
+async function callClaude(system,user){
   try{
-    const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1500,system:sys,messages:[{role:"user",content:usr}]})});
+    const r=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1200,
+        system,messages:[{role:"user",content:user}]})
+    });
     const d=await r.json();
-    const text=d.content?.find(b=>b.type==="text")?.text||"{}";
-    return JSON.parse(text.replace(/```json|```/g,"").trim());
-  }catch{return null;}
+    return d.content?.find(b=>b.type==="text")?.text||"";
+  }catch{return"";}
 }
 
-async function analyzeIdea(prompt){
+async function getPlainEnglishRead(stock,scoreData){
+  const{direction,decision,score,expiration,warnings,reasons}=scoreData;
+  const prompt=`Stock: ${stock.ticker} (${getCompanyName(stock.ticker)})
+Price: $${stock.price?.toFixed(2)} | Change today: ${stock.change?.toFixed(2)}%
+Direction: ${direction} | Decision: ${decision} | Score: ${score}/100
+Expiration: ${expiration}
+Key reasons: ${reasons.join(", ")||"mixed signals"}
+Key warnings: ${warnings.join(", ")||"none"}
+20-day trend: ${stock.ema20?"price is "+(stock.price>stock.ema20?"ABOVE":"BELOW")+" $"+stock.ema20:"N/A"}
+50-day trend: ${stock.ema50?"price is "+(stock.price>stock.ema50?"ABOVE":"BELOW")+" $"+stock.ema50:"N/A"}
+RSI: ${stock.rsi?.toFixed(0)} | IV Rank: ${stock.ivRank?.toFixed(0)}%
+Earnings in: ${stock.earningsDays<999?stock.earningsDays+" days":"not soon"}
+News sentiment: ${stock.sentiment}
+Support: $${stock.support||"N/A"} | Resistance: $${stock.resistance||"N/A"}
+
+Write a 3-4 sentence plain English explanation of this options setup for someone learning to trade. Explain what the chart is saying, whether now is a good time to enter, and what to watch for. No jargon without explanation. Be honest — do not hype the trade. If it's a WAIT or SKIP, clearly explain why and what would need to happen before it becomes a TRADE. End with one sentence on what to do right now.`;
+
   return callClaude(
-    `You are Lucas Trade Intel — a brutally honest options trading analyst. Weekly/monthly options on tech, AI, energy. Factor in MA50/MA200 trend, MACD, Bollinger Bands, support/resistance, RSI, IV rank, sentiment, and earnings proximity. Disagree if data doesn't support the thesis. JSON only, no markdown. Schema: {"verdict":"BULLISH|BEARISH|NEUTRAL","confidence":0-10,"reasoning":"2-3 sentences","suggestedPlay":"specific options strategy","keyRisk":"one sentence","agree":true/false}`,
+    `You are a patient options trading coach. Write in plain conversational English. No jargon. No hype. Be honest about risks. Never say "guaranteed," "easy money," or "can't lose." Use realistic language: "good setup," "wait for confirmation," "risk is elevated," "avoid chasing." Plain text only — no bullet points, no headers, no markdown.`,
     prompt
   );
 }
 
-async function getChartAnalysis(data){
-  try{
-    const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:800,
-        system:`You are a friendly trading coach explaining a stock chart to someone who is brand new to trading. 
-NEVER use technical jargon without explaining it in plain English right away.
-NEVER say "MA50", "MA200", "MACD", "RSI", "Bollinger Bands" without immediately explaining what it means in simple terms.
-Write like you're texting a smart friend who knows nothing about trading. Keep it conversational, honest, and clear.
-End with a simple bottom line: is this a good time to buy calls, buy puts, or wait?
-Respond with plain text only — no JSON, no bullet points, no headers. Just 4-6 natural flowing sentences.`,
-        messages:[{role:"user",content:`Give me a plain English chart reading for ${data.ticker}. Here is the data:
+async function getAfterHoursPicks(stocks){
+  const spyData=stocks.find(s=>s.ticker==="SPY");
+  const qqqData=stocks.find(s=>s.ticker==="QQQ");
+  const spySig=getMarketSignal(spyData);
+  const qqqSig=getMarketSignal(qqqData);
 
-Current price: $${data.price?.toFixed(2)}
-Today's change: ${data.change?.toFixed(2)}%
-Recent momentum: ${data.momentum?.toFixed(0)}/100 (100 = very strong upward move today, 0 = very weak)
-
-50-day trend line (average price over last 50 days): $${data.ma50||"not enough data"}
-200-day trend line (average price over last 200 days): $${data.ma200||"not enough data"}
-Price vs 50-day trend: ${data.ma50?(data.price>data.ma50?"ABOVE (bullish sign)":"BELOW (bearish sign)"):"unknown"}
-Price vs 200-day trend: ${data.ma200?(data.price>data.ma200?"ABOVE (bullish long term)":"BELOW (bearish long term)"):"unknown"}
-
-Momentum crossover signal: ${data.macdHist!=null?(data.macdHist>0?"BULLISH (buying momentum building)":"BEARISH (selling momentum building)"):"not available"}
-
-Price trading range (Bollinger Bands):
-- Upper boundary: $${data.bbUpper||"N/A"} (if price is near here, stock may be getting expensive)
-- Middle: $${data.bbMid||"N/A"}
-- Lower boundary: $${data.bbLower||"N/A"} (if price is near here, stock may be cheap/oversold)
-- Current price position: ${data.bbUpper&&data.bbLower?(data.price>data.bbUpper?"Near the TOP of range — possibly overbought":data.price<data.bbLower?"Near the BOTTOM of range — possibly oversold":"In the MIDDLE of range — neutral"):"unknown"}
-
-Strength indicator (RSI): ${data.rsi?.toFixed(0)}/100 ${data.rsi>70?"(above 70 = stock may be overbought, could pull back)":data.rsi<30?"(below 30 = stock may be oversold, could bounce)":"(between 30-70 = healthy range)"}
-
-Key price levels:
-- Support (where buyers usually step in): $${data.support||"N/A"}
-- Resistance (where sellers usually step in): $${data.resistance||"N/A"}
-
-News sentiment: ${data.sentiment} 
-Volume spike today: ${data.volumeSpike?"YES — unusual activity, something may be happening":"No"}
-Earnings coming up: ${data.earningsDays<999?`In ${data.earningsDays} days — this is important for options!`:"Not imminent"}
-
-Explain all of this in plain English like talking to a friend. No jargon. What does the chart say about where this stock might go?`}]})});
-    const d=await r.json();
-    return d.content?.find(b=>b.type==="text")?.text||"Could not generate analysis.";
-  }catch{return "Could not connect to analysis engine. Check your connection.";}
-}
-
-async function genPicks(stocks){
-  const data=stocks.filter(s=>s.live).slice(0,15).map(s=>
-    `${s.ticker}: $${s.price?.toFixed(2)} chg=${s.change?.toFixed(2)}% mom=${s.momentum?.toFixed(0)} rsi=${s.rsi} iv=${s.ivRank?.toFixed(0)}% sent=${s.sentiment} ma50=${s.ma50||"N/A"} ma200=${s.ma200||"N/A"} macd=${s.macdHist||"N/A"} bb=${s.bbLower||"N/A"}-${s.bbUpper||"N/A"} sup=${s.support||"N/A"} res=${s.resistance||"N/A"} earn=${s.earningsDays<999?s.earningsDays+"d":"N/A"} volSpike=${s.volumeSpike}`
-  ).join("\n");
-  return callClaude(
-    `You are an elite options analyst. Pick the single best weekly and monthly options play using momentum, RSI, MA trend, MACD, Bollinger Bands, support/resistance, IV rank, and sentiment. Be specific and honest. JSON only. Schema: {"weekly":{"ticker":"","direction":"BULLISH|BEARISH","confidence":0-10,"reasoning":"2-3 sentences","suggestedPlay":"specific strategy","keyRisk":"one sentence"},"monthly":{"ticker":"","direction":"BULLISH|BEARISH","confidence":0-10,"reasoning":"2-3 sentences","suggestedPlay":"specific strategy","keyRisk":"one sentence"}}`,
-    `Market data:\n${data}\nToday: ${new Date().toDateString()}`
-  );
-}
-
-// ── Fetch candle + news data independently (works 24/7, no live quote needed) ──
-async function fetchHistoricalData(ticker){
-  try{
-    const from=Math.floor(Date.now()/1000)-86400*220; // 220 days back
-    const to=Math.floor(Date.now()/1000);
-    const [cRes,nRes,eRes]=await Promise.all([
-      fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${ticker}&resolution=D&from=${from}&to=${to}&token=${FINNHUB_KEY}`),
-      fetch(`https://finnhub.io/api/v1/company-news?symbol=${ticker}&from=${getDateStr(-7)}&to=${getDateStr(0)}&token=${FINNHUB_KEY}`),
-      fetch(`https://finnhub.io/api/v1/calendar/earnings?symbol=${ticker}&token=${FINNHUB_KEY}`)
-    ]);
-    const candles=await cRes.json();
-    const news=await nRes.json();
-    const earnings=await eRes.json();
-
-    if(candles.s!=="ok"||!candles.c?.length) return null;
-
-    const closes=candles.c;
-    const highs=candles.h;
-    const lows=candles.l;
-    const lastClose=closes[closes.length-1];
-    const prevClose=closes[closes.length-2]||lastClose;
-    const change=prevClose>0?((lastClose-prevClose)/prevClose)*100:0;
-
-    // All indicators from historical data
-    const rsi=calcRSI(closes);
-    const ma50=closes.length>=50?parseFloat(calcEMA(closes,50).toFixed(2)):null;
-    const ma200=closes.length>=200?parseFloat(calcEMA(closes,200).toFixed(2)):null;
-    const {macd:macdVal,signal:macdSig,hist:macdHist}=calcMACD(closes);
-    const {upper:bbUpper,lower:bbLower,mid:bbMid}=calcBollinger(closes);
-    const {support,resistance}=getSupportResistance(highs,lows,lastClose);
-
-    // Sentiment from news
-    let bull=0,bear=0;
-    if(Array.isArray(news)){
-      news.slice(0,10).forEach(n=>{
-        const t=(n.headline||"").toLowerCase();
-        if(["surge","jump","beat","rise","gain","growth","upgrade","strong","bullish","rally","soar"].some(w=>t.includes(w))) bull++;
-        if(["fall","drop","miss","decline","loss","cut","downgrade","weak","bearish","crash","slump","disappoint"].some(w=>t.includes(w))) bear++;
-      });
-    }
-    const sentiment=bull>bear?"bullish":bear>bull?"bearish":"neutral";
-    const sentimentScore=bull+bear>0?Math.round((bull/(bull+bear))*100):50;
-
-    // Earnings
-    let earningsDays=999;
-    if(earnings.earningsCalendar?.length>0){
-      const nx=earnings.earningsCalendar.find(x=>new Date(x.date)>=new Date());
-      if(nx) earningsDays=Math.round((new Date(nx.date)-new Date())/86400000);
-    }
-
-    // Day range momentum from last candle
-    const dayRange=(highs[highs.length-1]||0)-(lows[lows.length-1]||0);
-    const momentum=dayRange>0?Math.min(100,Math.max(0,((lastClose-lows[lows.length-1])/dayRange)*100)):50;
-
-    return{
-      ticker,live:false,historical:true,
-      price:lastClose,prevClose,change,momentum,
-      rsi,ma50,ma200,macd:macdVal,macdSignal:macdSig,macdHist,
-      bbUpper,bbLower,bbMid,support,resistance,
-      sentiment,sentimentScore,earningsDays,
-      ivRank:null,ivLive:false,newsHeadlines:[]
-    };
-  }catch{return null;}
-}
-
-async function genEODPicks(stocks){
-  // STRATEGY: Use existing loaded stocks data first (always available)
-  // Then supplement with a few fresh historical fetches for key tickers
-  // This ensures we ALWAYS have data to work with
-
-  // Step 1: Use existing stocks that have real chart data (ma50/ma200/macd)
-  let dataPool=stocks.filter(s=>s.price>0&&(s.ma50||s.ma200||s.macdHist!=null));
-
-  // Step 2: If pool is small (after hours / simulated), fetch fresh historical
-  // for just 8 key tickers — fast enough to not timeout
-  if(dataPool.length<10){
-    const KEY=["NVDA","SPY","QQQ","PLTR","TSLA","OKLO","RKLB","GLD"];
-    const fresh=await Promise.all(KEY.map(t=>fetchHistoricalData(t)));
-    fresh.forEach((h,i)=>{
-      if(h&&h.price>0){
-        const seed=KEY[i].split("").reduce((a,c)=>a+c.charCodeAt(0),0);
-        h.ivRank=h.ivRank||((Math.sin(seed*6)*10000)%1+1)/2*100;
-        // Add to pool if not already there
-        if(!dataPool.find(s=>s.ticker===KEY[i])) dataPool.push(h);
-      }
-    });
-  }
-
-  // Step 3: Always include all existing stocks as fallback
-  stocks.forEach(s=>{
-    if(s.price>0&&!dataPool.find(d=>d.ticker===s.ticker)) dataPool.push(s);
-  });
-
-  // Step 4: Sort by signal confidence — best setups first
-  dataPool.sort((a,b)=>{
-    const sa=getSignalAndConfidence(a),sb=getSignalAndConfidence(b);
-    return sb.confScore-sa.confScore||Math.abs(b.change)-Math.abs(a.change);
-  });
-
-  // Take top 20 for analysis
-  const top=dataPool.slice(0,20);
+  const top=stocks
+    .map(s=>({...s,scoreData:scoreStock(s,spySig,qqqSig)}))
+    .filter(s=>s.scoreData.decision==="TRADE"||s.scoreData.decision==="WAIT")
+    .sort((a,b)=>b.scoreData.score-a.scoreData.score)
+    .slice(0,15);
 
   const dataStr=top.map(s=>{
-    const sig=getSignalAndConfidence(s);
+    const sd=s.scoreData;
     return`${s.ticker} (${getCompanyName(s.ticker)}) [${getSector(s.ticker)}]:
-  Price: $${s.price?.toFixed(2)} | Change: ${s.change?.toFixed(2)}% | Data quality: ${s.historical?"real candles":s.live?"live":"estimated"}
-  50-day trend: ${s.ma50?"$"+s.ma50+", price "+(s.price>s.ma50?"ABOVE = bullish":"BELOW = bearish"):"N/A"}
-  200-day trend: ${s.ma200?"$"+s.ma200+", price "+(s.price>s.ma200?"ABOVE = strong":"BELOW = weak"):"N/A"}
-  Momentum: ${s.macdHist!=null?(s.macdHist>0?"building up (bullish)":"fading down (bearish)"):"N/A"}
-  RSI: ${s.rsi?.toFixed(0)||"N/A"} ${s.rsi>70?"overbought":s.rsi<30?"oversold":"healthy"}
-  Range position: ${s.bbUpper&&s.bbLower?(s.price>=s.bbUpper*0.98?"top of range":s.price<=s.bbLower*1.02?"bottom of range":"middle"):"N/A"}
-  Support: $${s.support||"N/A"} | Resistance: $${s.resistance||"N/A"}
-  Sentiment: ${s.sentiment} | IV: ${s.ivRank?.toFixed(0)||"N/A"}% | Earnings: ${s.earningsDays<999?s.earningsDays+"d":"clear"}
-  Signal: ${sig.label} ${sig.confidence} (${sig.bullPoints}↑ ${sig.bearPoints}↓)`;
+  Score: ${sd.score}/100 | Direction: ${sd.direction} | Decision: ${sd.decision}
+  Price: $${s.price?.toFixed(2)} | Change: ${s.change?.toFixed(2)}% | RSI: ${s.rsi?.toFixed(0)}
+  20-day avg: ${s.ema20?"$"+s.ema20+" (price "+(s.price>s.ema20?"ABOVE":"BELOW")+")":"N/A"}
+  50-day avg: ${s.ema50?"$"+s.ema50+" (price "+(s.price>s.ema50?"ABOVE":"BELOW")+")":"N/A"}
+  Momentum: ${s.macdHist>0?"building up":"fading down"}
+  IV Rank: ${s.ivRank?.toFixed(0)}% | Earnings: ${s.earningsDays<999?s.earningsDays+"d away":"clear"}
+  Reasons: ${sd.reasons.slice(0,2).join(", ")}`;
   }).join("\n\n");
 
+  const raw=await callClaude(
+    `You are an expert swing options trading coach. Pick the single best weekly debit spread and monthly debit spread from the data. Prioritize defined-risk call or put debit spreads for 7-45 DTE. Write reasoning in plain English. JSON only, no markdown. Schema: {"weekly":{"ticker":"","direction":"BULLISH|BEARISH","strategy":"Call Debit Spread|Put Debit Spread","confidence":0-10,"reasoning":"2-3 plain English sentences","suggestedPlay":"specific spread guidance","keyRisk":"one plain sentence","bestEntry":"one sentence on when to enter"},"monthly":{"ticker":"","direction":"BULLISH|BEARISH","strategy":"Call Debit Spread|Put Debit Spread","confidence":0-10,"reasoning":"2-3 plain English sentences","suggestedPlay":"specific spread guidance","keyRisk":"one plain sentence","bestEntry":"one sentence on when to enter"}}`,
+    `After hours swing options analysis. Market is closed.\n\nTop setups:\n\n${dataStr}\n\nPick the best weekly (7-14 DTE) and monthly (21-45 DTE) debit spread trades. Return ONLY JSON.`
+  );
   try{
-    const r=await fetch("https://api.anthropic.com/v1/messages",{
-      method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        model:"claude-sonnet-4-20250514",max_tokens:1200,
-        system:`You are an expert options trading coach helping someone plan trades for the coming week. Market is closed.
-CRITICAL: Always respond with ONLY a valid JSON object. No text before or after. No markdown. No backticks.
-Always return both weekly and monthly picks regardless of data quality — use your best judgment.
-Write reasoning in plain English. No jargon like "MA50" or "MACD" without explaining what it means.
-Schema (return EXACTLY this): {"weekly":{"ticker":"","direction":"BULLISH|BEARISH","confidence":0-10,"reasoning":"2-3 plain English sentences","suggestedPlay":"specific strategy with strike/expiry guidance","keyRisk":"one plain English sentence","bestEntryNote":"one sentence on when/where to enter"},"monthly":{"ticker":"","direction":"BULLISH|BEARISH","confidence":0-10,"reasoning":"2-3 plain English sentences","suggestedPlay":"specific strategy with strike/expiry guidance","keyRisk":"one plain English sentence","bestEntryNote":"one sentence on when/where to enter"}}`,
-        messages:[{role:"user",content:`After hours analysis — ${new Date().toDateString()}. Market closed.\n\nStock data across AI chips, quantum, nuclear, space, commodities, and macro:\n\n${dataStr}\n\nPick the single best weekly and monthly options play. Consider all sectors. Return ONLY the JSON.`}]
-      })
-    });
-    const d=await r.json();
-    const raw=d.content?.find(b=>b.type==="text")?.text||"";
     const cleaned=raw.replace(/```json|```/g,"").trim();
-    // Try direct parse first
-    try{ const result=JSON.parse(cleaned); if(result?.weekly&&result?.monthly) return result; }catch{}
-    // Try extracting JSON object
-    const match=cleaned.match(/\{[\s\S]*"monthly"[\s\S]*\}/);
-    if(match) try{ const result=JSON.parse(match[0]); if(result?.weekly&&result?.monthly) return result; }catch{}
-    // Fallback picks
-    throw new Error("parse failed");
-  }catch{
-    // Always return something useful — never leave user with nothing
-    const bestBull=dataPool.find(s=>getSignalAndConfidence(s).label==="BULLISH"&&getSignalAndConfidence(s).confidence==="STRONG");
-    const bestBear=dataPool.find(s=>getSignalAndConfidence(s).label==="BEARISH"&&getSignalAndConfidence(s).confidence==="STRONG");
-    const weeklyTicker=bestBull?.ticker||"SPY";
-    const monthlyTicker=bestBull?.ticker!==bestBear?.ticker?bestBull?.ticker||"QQQ":"NVDA";
-    return{
-      weekly:{
-        ticker:weeklyTicker,
-        direction:"BULLISH",
-        confidence:5,
-        reasoning:`Based on available chart data, ${weeklyTicker} (${getCompanyName(weeklyTicker)}) shows the strongest setup right now. The analysis engine encountered an issue parsing the full response — this is a simplified pick based on signal scoring. Try regenerating for a more detailed analysis.`,
-        suggestedPlay:`Buy a call option slightly above current price expiring next Friday. Start with 1 contract to test the trade.`,
-        keyRisk:"Limited data after market hours — verify the setup Monday morning before entering.",
-        bestEntryNote:"Enter Monday morning after the first 15 minutes of trading to let the price settle."
-      },
-      monthly:{
-        ticker:monthlyTicker,
-        direction:"BULLISH",
-        confidence:5,
-        reasoning:`${monthlyTicker} (${getCompanyName(monthlyTicker)}) shows reasonable positioning for a monthly play based on trend analysis. Regenerate this pick during market hours for a more specific and confident recommendation.`,
-        suggestedPlay:`Buy a call option 3-5% above current price expiring 30-45 days out. Use a small position size.`,
-        keyRisk:"Market conditions can change quickly — always verify before entering any trade.",
-        bestEntryNote:"Look for a small pullback toward support before entering to get a better price on the option."
-      }
-    };
-  }
+    const result=JSON.parse(cleaned);
+    if(result?.weekly&&result?.monthly) return result;
+  }catch{}
+  // Fallback
+  const bestTrade=top.find(s=>s.scoreData.decision==="TRADE");
+  return{
+    weekly:{ticker:bestTrade?.ticker||"SPY",direction:"BULLISH",strategy:"Call Debit Spread",confidence:5,
+      reasoning:"Market data is limited right now. This is a default suggestion based on available signals. Regenerate during market hours for a more specific recommendation.",
+      suggestedPlay:"Buy a call spread slightly above current price, 7-14 DTE. Start with 1 contract.",
+      keyRisk:"Limited data — verify setup on your broker before entering.",
+      bestEntry:"Wait for Monday market open and confirm direction before entering."},
+    monthly:{ticker:bestTrade?.ticker||"QQQ",direction:"BULLISH",strategy:"Call Debit Spread",confidence:5,
+      reasoning:"QQQ tracks the Nasdaq 100 tech and AI stocks. Default monthly suggestion based on trend analysis.",
+      suggestedPlay:"Buy a call spread 2-3% above current price, 30-45 DTE.",
+      keyRisk:"Verify options liquidity on your broker. Check open interest before entering.",
+      bestEntry:"Look for a small pullback before entering to get better pricing on the spread."}
+  };
 }
 
-// ── Design tokens ─────────────────────────────────────────────────────────────
+// ── Trade Tracker ─────────────────────────────────────────────────────────────
+function loadTrades(){try{return JSON.parse(localStorage.getItem("lti_trades")||"[]");}catch{return[];}}
+function saveTrades(t){try{localStorage.setItem("lti_trades",JSON.stringify(t));}catch{}}
+
+// ── Design ────────────────────────────────────────────────────────────────────
 const C={
   bg:"#0a0f1e",bg2:"#111827",bg3:"#1a2235",
   border:"rgba(255,255,255,0.07)",border2:"rgba(255,255,255,0.12)",
   gold:"#c9a84c",goldLt:"#f0d080",
   text:"#e8edf5",text2:"#8899bb",text3:"#4a5a7a",
-  green:"#00c896",red:"#f0465a",amber:"#f59e0b",blue:"#3b82f6"
+  green:"#00c896",red:"#f0465a",amber:"#f59e0b",blue:"#3b82f6",
+  purple:"#a855f7"
 };
-
-// ── Shared styles ─────────────────────────────────────────────────────────────
 const card={background:C.bg2,border:`1px solid ${C.border}`,borderRadius:16,overflow:"hidden",marginBottom:12};
-const cardHdr={padding:"14px 16px",borderBottom:`1px solid ${C.border}`,fontSize:11,color:C.text2,letterSpacing:2,fontFamily:"'DM Mono',monospace",fontWeight:500,display:"flex",alignItems:"center",gap:8};
-const inp={background:C.bg3,border:`1px solid ${C.border2}`,borderRadius:10,padding:"11px 14px",color:C.text,fontFamily:"'DM Sans',sans-serif",fontSize:14,outline:"none",width:"100%",transition:"border 0.2s"};
-const goldBtn={background:`linear-gradient(135deg,${C.gold},${C.goldLt},${C.gold})`,border:"none",borderRadius:10,padding:"13px",color:"#0a0f1e",fontWeight:700,fontFamily:"'DM Sans',sans-serif",fontSize:14,cursor:"pointer",letterSpacing:0.5,width:"100%",marginTop:10,boxShadow:"0 4px 20px rgba(201,168,76,0.3)"};
-const ghostBtn={background:"transparent",border:`1px solid ${C.border2}`,borderRadius:10,padding:"10px 16px",color:C.text2,fontFamily:"'DM Sans',sans-serif",fontSize:13,cursor:"pointer"};
-const lbl={fontSize:11,color:C.text2,letterSpacing:1,marginBottom:6,display:"block",fontWeight:500};
-const fBtn=a=>({padding:"6px 12px",borderRadius:8,border:a?`1px solid ${C.gold}`:`1px solid ${C.border}`,background:a?"rgba(201,168,76,0.12)":"transparent",color:a?C.goldLt:C.text2,fontSize:12,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif",fontWeight:a?600:400,transition:"all 0.15s"});
+const inp={background:C.bg3,border:`1px solid ${C.border2}`,borderRadius:10,padding:"11px 14px",color:C.text,fontSize:14,outline:"none",width:"100%"};
+const goldBtn={background:`linear-gradient(135deg,${C.gold},${C.goldLt},${C.gold})`,border:"none",borderRadius:10,padding:"13px",color:"#0a0f1e",fontWeight:700,fontSize:14,cursor:"pointer",width:"100%",marginTop:8,boxShadow:"0 4px 20px rgba(201,168,76,0.25)"};
+const ghostBtn={background:"transparent",border:`1px solid ${C.border2}`,borderRadius:10,padding:"9px 16px",color:C.text2,fontSize:13,cursor:"pointer"};
+const lbl={fontSize:11,color:C.text2,letterSpacing:1,marginBottom:5,display:"block",fontWeight:500};
+const fBtn=a=>({padding:"6px 12px",borderRadius:8,border:a?`1px solid ${C.gold}`:`1px solid ${C.border}`,background:a?"rgba(201,168,76,0.12)":"transparent",color:a?C.goldLt:C.text2,fontSize:11,cursor:"pointer",whiteSpace:"nowrap",fontWeight:a?600:400,transition:"all 0.15s"});
+
+function decisionColor(d){return d==="TRADE"?C.green:d==="WAIT"?C.amber:C.red;}
+function decisionBg(d){return d==="TRADE"?"rgba(0,200,150,0.1)":d==="WAIT"?"rgba(245,158,11,0.1)":"rgba(240,70,90,0.1)";}
+function confidenceColor(c){return c==="High"?C.green:c==="Medium"?C.amber:C.red;}
 
 // ── Components ────────────────────────────────────────────────────────────────
 function Logo(){
@@ -655,18 +497,14 @@ function Logo(){
       </div>
       <div>
         <div style={{fontSize:15,fontWeight:400,color:C.goldLt,fontFamily:"'DM Serif Display',serif",letterSpacing:0.5,lineHeight:1}}>Lucas Trade Intel</div>
-        <div style={{fontSize:9,color:C.text3,letterSpacing:3,marginTop:3,fontFamily:"'DM Mono',monospace",fontWeight:500}}>OPTIONS · TECH · ENERGY</div>
+        <div style={{fontSize:9,color:C.text3,letterSpacing:3,marginTop:3,fontFamily:"'DM Mono',monospace"}}>SWING OPTIONS ASSISTANT</div>
       </div>
     </div>
   );
 }
 
-function Chip({label,color,bg,size=10}){
-  return(
-    <span style={{fontSize:size,background:bg||color+"15",border:`1px solid ${color}30`,color,borderRadius:6,padding:"2px 8px",fontFamily:"'DM Mono',monospace",fontWeight:500,letterSpacing:0.5,whiteSpace:"nowrap"}}>
-      {label}
-    </span>
-  );
+function Chip({label,color,size=10}){
+  return <span style={{fontSize:size,background:color+"18",border:`1px solid ${color}30`,color,borderRadius:6,padding:"2px 8px",fontFamily:"'DM Mono',monospace",fontWeight:500,letterSpacing:0.5,whiteSpace:"nowrap"}}>{label}</span>;
 }
 
 function LiveDot({live}){
@@ -677,7 +515,8 @@ function LiveDot({live}){
 
 function TickerLogo({ticker,size=32}){
   const [err,setErr]=useState(false);
-  const domain=({NVDA:"nvidia.com",AMD:"amd.com",AAPL:"apple.com",MSFT:"microsoft.com",META:"meta.com",GOOGL:"google.com",TSLA:"tesla.com",AMZN:"amazon.com",ORCL:"oracle.com",CRM:"salesforce.com",PLTR:"palantir.com",ARM:"arm.com",AVGO:"broadcom.com",MRVL:"marvell.com",INTC:"intel.com",QCOM:"qualcomm.com",TSM:"tsmc.com",SMCI:"supermicro.com",XOM:"exxonmobil.com",CVX:"chevron.com",OXY:"oxy.com",SLB:"slb.com",FSLR:"firstsolar.com",NEE:"nexteraenergy.com",HAL:"halliburton.com",MPC:"marathonpetroleum.com",VLO:"valero.com",DVN:"devonenergy.com",QQQ:"invesco.com",SPY:"ssga.com",SOUN:"soundhound.com",BBAI:"bigbear.ai",IONQ:"ionq.com",HOOD:"robinhood.com",AI:"c3.ai",ARKK:"ark-invest.com",BOTZ:"globalxetfs.com",AIQ:"globalxetfs.com",SMH:"vaneck.com",GLD:"spdrgoldshares.com",USO:"uscfinvestments.com",SOXX:"ishares.com"})[ticker]||`${ticker.toLowerCase()}.com`;
+  const domains={NVDA:"nvidia.com",AMD:"amd.com",AAPL:"apple.com",MSFT:"microsoft.com",META:"meta.com",GOOGL:"google.com",TSLA:"tesla.com",AMZN:"amazon.com",ORCL:"oracle.com",CRM:"salesforce.com",PLTR:"palantir.com",ARM:"arm.com",AVGO:"broadcom.com",INTC:"intel.com",QCOM:"qualcomm.com",TSM:"tsmc.com",SMCI:"supermicro.com",XOM:"exxonmobil.com",CVX:"chevron.com",NEE:"nexteraenergy.com",FSLR:"firstsolar.com",RKLB:"rocketlabusa.com",ASTS:"ast-science.com",CEG:"constellationenergy.com",CCJ:"cameco.com",IONQ:"ionq.com",ISRG:"intuitivesurgical.com",NOW:"servicenow.com",SNOW:"snowflake.com",DDOG:"datadoghq.com",NET:"cloudflare.com",COIN:"coinbase.com",HOOD:"robinhood.com",MSTR:"microstrategy.com"};
+  const domain=domains[ticker]||`${ticker.toLowerCase()}.com`;
   if(err) return(
     <div style={{width:size,height:size,borderRadius:size/3.5,background:`linear-gradient(135deg,${C.bg3},${C.bg2})`,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
       <span style={{fontSize:size*0.32,fontWeight:600,color:C.gold,fontFamily:"'DM Mono',monospace"}}>{ticker.slice(0,2)}</span>
@@ -690,1042 +529,666 @@ function TickerLogo({ticker,size=32}){
   );
 }
 
-function MiniBar({value,max=100,color,height=4}){
+function DecisionBadge({decision,size=12}){
+  const color=decisionColor(decision);
+  const emoji=decision==="TRADE"?"✓":decision==="WAIT"?"⏳":"✗";
+  return <span style={{fontSize:size,background:decisionBg(decision),border:`1px solid ${color}30`,color,borderRadius:6,padding:"3px 10px",fontFamily:"'DM Mono',monospace",fontWeight:700,letterSpacing:1}}>{emoji} {decision}</span>;
+}
+
+// ── Stock Card (scanner) ──────────────────────────────────────────────────────
+function StockCard({stock,scoreData,onClick}){
+  const dc=decisionColor(scoreData.decision);
+  const isBull=scoreData.direction==="BULLISH";
   return(
-    <div style={{height,background:"rgba(255,255,255,0.06)",borderRadius:999,overflow:"hidden",flex:1}}>
-      <div style={{width:`${Math.min(100,(value/max)*100)}%`,height:"100%",background:color,borderRadius:999,transition:"width 0.6s ease"}}/>
+    <div onClick={()=>onClick(stock,scoreData)}
+      style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",transition:"background 0.15s"}}
+      onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.02)"}
+      onMouseLeave={e=>e.currentTarget.style.background="transparent"}
+      onTouchStart={e=>e.currentTarget.style.background="rgba(255,255,255,0.02)"}
+      onTouchEnd={e=>e.currentTarget.style.background="transparent"}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:10}}>
+        <TickerLogo ticker={stock.ticker} size={38}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+            <div>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                <span style={{fontSize:15,fontWeight:600,color:C.text}}>{stock.ticker}</span>
+                <LiveDot live={stock.live}/>
+              </div>
+              <div style={{fontSize:11,color:C.text3}}>{getCompanyName(stock.ticker)} · {getSector(stock.ticker)}</div>
+            </div>
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <div style={{fontSize:15,fontWeight:600,color:C.text,fontFamily:"'DM Mono',monospace"}}>${stock.price?.toFixed(2)}</div>
+              <div style={{fontSize:12,color:stock.change>=0?C.green:C.red,fontFamily:"'DM Mono',monospace"}}>{stock.change>=0?"+":""}{stock.change?.toFixed(2)}%</div>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center",marginBottom:8}}>
+            <DecisionBadge decision={scoreData.decision}/>
+            <Chip label={scoreData.direction} color={isBull?C.green:scoreData.direction==="BEARISH"?C.red:C.text2}/>
+            {scoreData.decision!=="SKIP"&&<Chip label={scoreData.strategy.replace(" (wait for entry)","")} color={C.blue} size={9}/>}
+            <Chip label={`${scoreData.confidence} conf.`} color={confidenceColor(scoreData.confidence)} size={9}/>
+          </div>
+        </div>
+      </div>
+      {/* Score bar */}
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+        <div style={{fontSize:10,color:C.text3,fontFamily:"'DM Mono',monospace",flexShrink:0,width:56}}>Score {scoreData.score}</div>
+        <div style={{flex:1,height:5,background:C.bg3,borderRadius:999,overflow:"hidden"}}>
+          <div style={{width:`${scoreData.score}%`,height:"100%",background:scoreData.score>=70?C.green:scoreData.score>=45?C.amber:C.red,borderRadius:999,transition:"width 0.6s"}}/>
+        </div>
+        <div style={{fontSize:10,color:C.text3,fontFamily:"'DM Mono',monospace",flexShrink:0}}>{scoreData.expiration}</div>
+      </div>
+      {/* Top reason */}
+      {scoreData.reasons[0]&&<div style={{fontSize:11,color:C.text2,lineHeight:1.5,marginBottom:4}}>✓ {scoreData.reasons[0]}</div>}
+      {scoreData.warnings[0]&&<div style={{fontSize:11,color:C.amber,lineHeight:1.5}}>⚠ {scoreData.warnings[0]}</div>}
     </div>
   );
 }
 
-function MATag({price,ma,label}){
-  if(!ma||!price) return null;
-  const above=price>ma;
+// ── Stock Detail ──────────────────────────────────────────────────────────────
+function StockDetail({stock,scoreData,onClose,onLogTrade}){
+  const [read,setRead]=useState(null);
+  const [readLoading,setReadLoading]=useState(false);
+  const spread=getSpreadGuidance(stock,scoreData);
+  const dc=decisionColor(scoreData.decision);
+
+  const handleRead=async()=>{
+    setReadLoading(true);setRead(null);
+    const r=await getPlainEnglishRead(stock,scoreData);
+    setRead(r);setReadLoading(false);
+  };
+
   return(
-    <span style={{fontSize:9,background:above?"rgba(0,200,150,0.1)":"rgba(240,70,90,0.1)",border:`1px solid ${above?C.green:C.red}25`,color:above?C.green:C.red,borderRadius:5,padding:"1px 6px",fontFamily:"'DM Mono',monospace"}}>
-      {label} {above?"↑":"↓"} ${ma?.toFixed(0)}
-    </span>
+    <div style={{position:"fixed",inset:0,background:C.bg,zIndex:200,overflowY:"auto",animation:"fadeUp 0.2s ease"}}>
+      {/* Header */}
+      <div style={{padding:16,borderBottom:`1px solid ${C.border}`,background:C.bg,position:"sticky",top:0,zIndex:10}}>
+        <button onClick={onClose} style={{...ghostBtn,display:"flex",alignItems:"center",gap:6,marginBottom:14,padding:"8px 14px"}}>
+          <span>←</span><span>Back</span>
+        </button>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <TickerLogo ticker={stock.ticker} size={52}/>
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+              <span style={{fontSize:22,fontWeight:600,color:C.text}}>{stock.ticker}</span>
+              <LiveDot live={stock.live}/>
+            </div>
+            <div style={{fontSize:12,color:C.text3,marginBottom:4}}>{getCompanyName(stock.ticker)} · {getSector(stock.ticker)}</div>
+            <div style={{fontSize:26,fontWeight:300,color:C.text,fontFamily:"'DM Serif Display',serif"}}>${stock.price?.toFixed(2)}</div>
+            <div style={{fontSize:13,color:stock.change>=0?C.green:C.red,fontFamily:"'DM Mono',monospace"}}>{stock.change>=0?"+":""}{stock.change?.toFixed(2)}% today</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{padding:16,display:"flex",flexDirection:"column",gap:12}}>
+        {/* Final Decision */}
+        <div style={{background:decisionBg(scoreData.decision),border:`1px solid ${dc}30`,borderRadius:14,padding:16}}>
+          <div style={{fontSize:10,color:dc,fontFamily:"'DM Mono',monospace",letterSpacing:2,marginBottom:8}}>FINAL DECISION</div>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+            <DecisionBadge decision={scoreData.decision} size={16}/>
+            <div style={{fontSize:22,fontWeight:400,color:dc,fontFamily:"'DM Serif Display',serif"}}>{scoreData.score}/100</div>
+            <Chip label={`${scoreData.confidence} Confidence`} color={confidenceColor(scoreData.confidence)} size={11}/>
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <Chip label={scoreData.direction} color={scoreData.direction==="BULLISH"?C.green:scoreData.direction==="BEARISH"?C.red:C.text2} size={12}/>
+            <Chip label={scoreData.strategy.replace(" (wait for entry)","")} color={C.blue} size={11}/>
+            <Chip label={scoreData.expiration} color={C.gold} size={11}/>
+          </div>
+        </div>
+
+        {/* Score breakdown */}
+        <div style={card}>
+          <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,fontSize:11,color:C.text2,letterSpacing:2,fontFamily:"'DM Mono',monospace"}}>📊 SCORE BREAKDOWN</div>
+          <div style={{padding:14,display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{flex:1,height:4,background:C.bg3,borderRadius:999,overflow:"hidden"}}>
+                <div style={{width:`${scoreData.score}%`,height:"100%",background:scoreData.score>=70?C.green:scoreData.score>=45?C.amber:C.red,borderRadius:999}}/>
+              </div>
+              <span style={{fontSize:13,fontWeight:600,color:scoreData.score>=70?C.green:scoreData.score>=45?C.amber:C.red,fontFamily:"'DM Mono',monospace",flexShrink:0}}>{scoreData.score}/100</span>
+            </div>
+            {scoreData.reasons.map((r,i)=>(
+              <div key={i} style={{display:"flex",gap:8,padding:"6px 10px",background:"rgba(0,200,150,0.06)",borderRadius:8}}>
+                <span style={{color:C.green,flexShrink:0}}>✓</span>
+                <span style={{fontSize:12,color:C.text2}}>{r}</span>
+              </div>
+            ))}
+            {scoreData.warnings.map((w,i)=>(
+              <div key={i} style={{display:"flex",gap:8,padding:"6px 10px",background:"rgba(245,158,11,0.06)",borderRadius:8}}>
+                <span style={{color:C.amber,flexShrink:0}}>⚠</span>
+                <span style={{fontSize:12,color:C.text2}}>{w}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Spread Construction */}
+        {spread&&(
+          <div style={card}>
+            <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,fontSize:11,color:C.blue,letterSpacing:2,fontFamily:"'DM Mono',monospace"}}>📐 {spread.type.toUpperCase()}</div>
+            <div style={{padding:14,display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{background:"rgba(0,200,150,0.06)",borderRadius:10,padding:12,border:`1px solid ${C.green}20`}}>
+                <div style={{fontSize:10,color:C.green,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:4}}>BUY (LONG LEG)</div>
+                <div style={{fontSize:13,color:C.text,fontWeight:500}}>{spread.longLeg}</div>
+              </div>
+              <div style={{background:"rgba(240,70,90,0.06)",borderRadius:10,padding:12,border:`1px solid ${C.red}20`}}>
+                <div style={{fontSize:10,color:C.red,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:4}}>SELL (SHORT LEG)</div>
+                <div style={{fontSize:13,color:C.text,fontWeight:500}}>{spread.shortLeg}</div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {[["EXPIRATION",spread.dte,C.gold],["MAX LOSS",spread.maxLoss,C.red],["PROFIT TARGET",spread.target,C.green],["STOP LOSS",spread.stop,C.amber]].map(([l,v,c])=>(
+                  <div key={l} style={{background:C.bg3,borderRadius:8,padding:"8px 10px"}}>
+                    <div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:3}}>{l}</div>
+                    <div style={{fontSize:11,color:c,lineHeight:1.4}}>{v}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{background:"rgba(59,130,246,0.08)",borderRadius:8,padding:10,border:`1px solid ${C.blue}20`}}>
+                <div style={{fontSize:10,color:C.blue,fontFamily:"'DM Mono',monospace",marginBottom:3}}>⚠ LIQUIDITY CHECK</div>
+                <div style={{fontSize:11,color:C.text2}}>{spread.note}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Key levels */}
+        {(stock.support||stock.resistance||stock.ema20||stock.ema50)&&(
+          <div style={card}>
+            <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,fontSize:11,color:C.text2,letterSpacing:2,fontFamily:"'DM Mono',monospace"}}>📍 KEY LEVELS</div>
+            <div style={{padding:14,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              {[[`20-day avg`,stock.ema20,stock.price>stock.ema20?C.green:C.red],
+                [`50-day avg`,stock.ema50,stock.price>stock.ema50?C.green:C.red],
+                ["Support",stock.support,C.green],["Resistance",stock.resistance,C.red]].map(([l,v,c])=>v?(
+                <div key={l} style={{background:C.bg3,borderRadius:8,padding:"8px 10px"}}>
+                  <div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:3}}>{l.toUpperCase()}</div>
+                  <div style={{fontSize:13,fontWeight:500,color:c,fontFamily:"'DM Mono',monospace"}}>${v}</div>
+                  <div style={{fontSize:9,color:C.text3,marginTop:2}}>{stock.price>v?"Price above ↑":"Price below ↓"}</div>
+                </div>
+              ):null)}
+            </div>
+          </div>
+        )}
+
+        {/* RSI + IV */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:12,padding:14}}>
+            <div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:6}}>RSI</div>
+            <div style={{fontSize:22,fontWeight:500,color:stock.rsi>70?C.red:stock.rsi<30?C.green:C.amber,fontFamily:"'DM Serif Display',serif"}}>{stock.rsi?.toFixed(0)}</div>
+            <div style={{fontSize:10,color:C.text2,marginTop:4}}>{stock.rsi>70?"Overbought":stock.rsi<30?"Oversold":"Healthy range"}</div>
+            <div style={{height:4,background:C.bg3,borderRadius:999,overflow:"hidden",marginTop:8}}>
+              <div style={{width:`${stock.rsi||50}%`,height:"100%",background:stock.rsi>70?C.red:stock.rsi<30?C.green:C.amber,borderRadius:999}}/>
+            </div>
+          </div>
+          <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:12,padding:14}}>
+            <div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:6}}>IV RANK</div>
+            <div style={{fontSize:22,fontWeight:500,color:stock.ivRank>70?C.red:stock.ivRank<30?C.green:C.amber,fontFamily:"'DM Serif Display',serif"}}>{stock.ivRank?.toFixed(0)}%</div>
+            <div style={{fontSize:10,color:C.text2,marginTop:4}}>{stock.ivRank>70?"Options expensive":stock.ivRank<30?"Options cheap":"Normal pricing"}</div>
+          </div>
+        </div>
+
+        {/* Earnings */}
+        {stock.earningsDays<45&&stock.earningsDays<999&&(
+          <div style={{background:stock.earningsDays<14?"rgba(240,70,90,0.08)":"rgba(245,158,11,0.08)",border:`1px solid ${stock.earningsDays<14?C.red:C.amber}30`,borderRadius:12,padding:14}}>
+            <div style={{fontSize:12,fontWeight:600,color:stock.earningsDays<14?C.red:C.amber,marginBottom:4}}>
+              {stock.earningsDays<14?"⚠ EARNINGS VERY SOON":"📅 Earnings Coming Up"} — {stock.earningsDays} days
+            </div>
+            <div style={{fontSize:12,color:C.text2,lineHeight:1.6}}>
+              {stock.earningsDays<7?"Avoid options trades before earnings — the risk is too high unless you specifically want an earnings play.":stock.earningsDays<21?"Use shorter expirations or wait until after earnings to enter a clean setup.":"Factor earnings into your expiration choice — avoid spreads that expire right around earnings date."}
+            </div>
+          </div>
+        )}
+
+        {/* News */}
+        {stock.newsHeadlines?.length>0&&(
+          <div style={card}>
+            <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,fontSize:11,color:C.text2,letterSpacing:2,fontFamily:"'DM Mono',monospace"}}>📰 RECENT NEWS</div>
+            <div style={{padding:14,display:"flex",flexDirection:"column",gap:8}}>
+              {stock.newsHeadlines.map((n,i)=>{
+                const nc=n.sentiment==="bullish"?C.green:n.sentiment==="bearish"?C.red:C.text3;
+                return(
+                  <div key={i} style={{padding:"8px 10px",background:C.bg3,borderRadius:8,border:`1px solid ${nc}20`}}>
+                    <div style={{fontSize:9,color:nc,fontFamily:"'DM Mono',monospace",marginBottom:3}}>{n.sentiment.toUpperCase()} · {n.source}</div>
+                    <div style={{fontSize:12,color:C.text2,lineHeight:1.4}}>{n.headline}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Plain English Read */}
+        <div style={{background:"rgba(201,168,76,0.06)",border:`1px solid ${C.gold}25`,borderRadius:14,padding:16}}>
+          <div style={{fontSize:13,fontWeight:600,color:C.goldLt,marginBottom:6}}>💬 Plain English Trade Read</div>
+          <div style={{fontSize:12,color:C.text2,marginBottom:12,lineHeight:1.6}}>Tap below for a plain English explanation of this setup — what the chart is saying, whether now is a good time to enter, and exactly what to watch for.</div>
+          {!read&&!readLoading&&(
+            <button onClick={handleRead} style={goldBtn}>💬 Explain This Trade</button>
+          )}
+          {readLoading&&(
+            <div style={{textAlign:"center",padding:20,color:C.gold,fontFamily:"'DM Mono',monospace",fontSize:11}}>
+              <div style={{fontSize:20,display:"inline-block",animation:"spin 1s linear infinite",marginBottom:8}}>◌</div>
+              <div>Analyzing setup…</div>
+            </div>
+          )}
+          {read&&(
+            <div style={{animation:"fadeUp 0.3s ease"}}>
+              <div style={{fontSize:13,color:C.text,lineHeight:1.8,marginBottom:12}}>{read}</div>
+              <button onClick={handleRead} style={{...ghostBtn,fontSize:12,width:"100%",textAlign:"center"}}>⟳ Refresh</button>
+            </div>
+          )}
+        </div>
+
+        {/* Log Trade Button */}
+        <button onClick={()=>onLogTrade(stock,scoreData)} style={{...goldBtn,background:"linear-gradient(135deg,#3b82f6,#60a5fa,#3b82f6)",boxShadow:"0 4px 20px rgba(59,130,246,0.25)"}}>
+          + Log This Trade to Tracker
+        </button>
+      </div>
+    </div>
   );
 }
 
-function StockRow({data,onClick}){
-  const sig=getSignalAndConfidence(data);
-  const ivl=getIVLabel(data.ivRank);
+// ── Section component ─────────────────────────────────────────────────────────
+function SectionCard({title,color,emoji,stocks,scoreMap,onClick,defaultCollapsed=false}){
+  const [open,setOpen]=useState(!defaultCollapsed);
+  if(stocks.length===0) return null;
   return(
-    <div onClick={()=>onClick(data)}
-      style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",transition:"background 0.15s"}}
-      onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.03)"}
-      onMouseLeave={e=>e.currentTarget.style.background="transparent"}
-      onTouchStart={e=>e.currentTarget.style.background="rgba(255,255,255,0.03)"}
-      onTouchEnd={e=>e.currentTarget.style.background="transparent"}>
-      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
-        <TickerLogo ticker={data.ticker} size={36}/>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-            <div>
-              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
-                <span style={{fontSize:15,fontWeight:600,color:C.text}}>{data.ticker}</span>
-                <LiveDot live={data.live}/>
-                {data.volumeSpike&&<Chip label="⚡ VOL" color={C.amber}/>}
-              </div>
-              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}>
-                <div style={{fontSize:11,color:C.text3}}>{getCompanyName(data.ticker)}</div>
-                <Chip label={getSector(data.ticker)} color={C.text3} size={8}/>
-              </div>
-              <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
-                <Chip label={`${sig.emoji} ${sig.label}`} color={sig.color}/>
-                <Chip label={sig.confidence} color={sig.confColor}/>
-                <Chip label={`${getSentEmoji(data.sentiment)} ${data.sentiment.toUpperCase()}`} color={getSentColor(data.sentiment)}/>
-              </div>
-            </div>
-            <div style={{textAlign:"right",flexShrink:0}}>
-              <div style={{fontSize:16,fontWeight:600,color:C.text,fontFamily:"'DM Mono',monospace"}}>${data.price?.toFixed(2)}</div>
-              <div style={{fontSize:12,color:data.change>=0?C.green:C.red,fontFamily:"'DM Mono',monospace"}}>{data.change>=0?"+":""}{data.change?.toFixed(2)}%</div>
+    <div style={card}>
+      <div onClick={()=>setOpen(!open)} style={{padding:"12px 16px",borderBottom:open?`1px solid ${C.border}`:"none",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+        <div style={{fontSize:12,color,fontFamily:"'DM Mono',monospace",fontWeight:600,letterSpacing:1}}>{emoji} {title} ({stocks.length})</div>
+        <span style={{color:C.text3,fontSize:14}}>{open?"▲":"▼"}</span>
+      </div>
+      {open&&stocks.map(s=><StockCard key={s.ticker} stock={s} scoreData={scoreMap[s.ticker]} onClick={onClick}/>)}
+    </div>
+  );
+}
+
+// ── After Hours Pick Card ─────────────────────────────────────────────────────
+function AHPickCard({pick,label}){
+  if(!pick) return null;
+  const bull=pick.direction==="BULLISH";
+  return(
+    <div style={{background:C.bg2,border:`1px solid rgba(59,130,246,0.25)`,borderRadius:16,overflow:"hidden",marginBottom:12,animation:"fadeUp 0.3s ease"}}>
+      <div style={{padding:"10px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:"rgba(59,130,246,0.05)"}}>
+        <div style={{fontSize:10,color:"#60a5fa",fontFamily:"'DM Mono',monospace",fontWeight:600,letterSpacing:1}}>🌙 {label}</div>
+        <div style={{fontSize:10,color:C.text3,fontFamily:"'DM Mono',monospace"}}>{new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"})}</div>
+      </div>
+      <div style={{padding:16}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+          <TickerLogo ticker={pick.ticker} size={44}/>
+          <div style={{flex:1}}>
+            <div style={{fontSize:11,color:C.text3,marginBottom:2}}>{getCompanyName(pick.ticker)}</div>
+            <div style={{fontSize:20,fontWeight:400,color:C.text,fontFamily:"'DM Serif Display',serif",marginBottom:6}}>{pick.ticker}</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              <Chip label={`${bull?"▲":"▼"} ${pick.direction}`} color={bull?C.green:C.red} size={11}/>
+              <Chip label={pick.strategy} color={C.blue} size={10}/>
+              <Chip label={`${pick.confidence}/10 confidence`} color={pick.confidence>=7?C.green:pick.confidence>=5?C.amber:C.red} size={10}/>
             </div>
           </div>
+        </div>
+        <div style={{fontSize:13,color:C.text2,lineHeight:1.7,marginBottom:10}}>{pick.reasoning}</div>
+        <div style={{background:C.bg3,borderRadius:10,padding:12,marginBottom:8,border:`1px solid ${C.gold}20`}}>
+          <div style={{fontSize:9,color:C.gold,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:4}}>SUGGESTED PLAY</div>
+          <div style={{fontSize:13,color:C.text,fontWeight:500}}>{pick.suggestedPlay}</div>
+        </div>
+        {pick.bestEntry&&(
+          <div style={{background:"rgba(59,130,246,0.08)",borderRadius:10,padding:10,marginBottom:8,border:`1px solid ${C.blue}20`}}>
+            <div style={{fontSize:9,color:"#60a5fa",fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:3}}>📍 ENTRY</div>
+            <div style={{fontSize:12,color:C.text2}}>{pick.bestEntry}</div>
+          </div>
+        )}
+        <div style={{background:"rgba(240,70,90,0.06)",borderRadius:10,padding:10,border:`1px solid ${C.red}20`}}>
+          <div style={{fontSize:9,color:C.red,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:3}}>⚠ KEY RISK</div>
+          <div style={{fontSize:12,color:C.text2}}>{pick.keyRisk}</div>
         </div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}>
-        <div>
-          <div style={{fontSize:9,color:C.text3,marginBottom:3,fontFamily:"'DM Mono',monospace",letterSpacing:1}}>RSI</div>
-          <div style={{display:"flex",alignItems:"center",gap:4}}>
-            <MiniBar value={data.rsi||50} color={data.rsi>70?C.red:data.rsi<30?C.green:C.amber}/>
-            <span style={{fontSize:10,color:C.text2,fontFamily:"'DM Mono',monospace",flexShrink:0}}>{data.rsi?.toFixed(0)}</span>
+    </div>
+  );
+}
+
+// ── Trade Tracker ─────────────────────────────────────────────────────────────
+function TradeTrackerTab({trades,onUpdateTrade,onDeleteTrade}){
+  const wins=trades.filter(t=>t.result==="Win").length;
+  const losses=trades.filter(t=>t.result==="Loss").length;
+  const total=trades.length;
+  const winRate=total>0?Math.round((wins/total)*100):0;
+
+  return(
+    <div style={{padding:16}}>
+      {/* Dashboard */}
+      {total>0&&(
+        <div style={card}>
+          <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,fontSize:11,color:C.text2,letterSpacing:2,fontFamily:"'DM Mono',monospace"}}>📈 PERFORMANCE DASHBOARD</div>
+          <div style={{padding:14,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            {[["TRADES",total,C.gold],["WINS",wins,C.green],["LOSSES",losses,C.red],["WIN RATE",`${winRate}%`,winRate>=50?C.green:C.red],["CALL SPREADS",trades.filter(t=>t.strategy?.includes("Call")).length,C.blue],["PUT SPREADS",trades.filter(t=>t.strategy?.includes("Put")).length,C.purple]].map(([l,v,c])=>(
+              <div key={l} style={{background:C.bg3,borderRadius:10,padding:10,textAlign:"center"}}>
+                <div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:4}}>{l}</div>
+                <div style={{fontSize:16,fontWeight:600,color:c,fontFamily:"'DM Mono',monospace"}}>{v}</div>
+              </div>
+            ))}
           </div>
         </div>
-        <div>
-          <div style={{fontSize:9,color:C.text3,marginBottom:3,fontFamily:"'DM Mono',monospace",letterSpacing:1}}>IV RANK</div>
-          <div style={{display:"flex",alignItems:"center",gap:4}}>
-            <MiniBar value={data.ivRank||50} color={getIVLabel(data.ivRank).color}/>
-            <span style={{fontSize:10,color:C.text2,fontFamily:"'DM Mono',monospace",flexShrink:0}}>{data.ivRank?.toFixed(0)}%</span>
-          </div>
+      )}
+
+      {/* Trades list */}
+      {trades.length===0?(
+        <div style={{textAlign:"center",padding:48,color:C.text3}}>
+          <div style={{fontSize:36,marginBottom:12}}>📋</div>
+          <div style={{fontSize:15,color:C.text2,marginBottom:6}}>No trades logged yet</div>
+          <div style={{fontSize:13,lineHeight:1.7}}>Tap any stock in the Scanner → scroll to bottom → tap "Log This Trade to Tracker"</div>
         </div>
-        <div>
-          <div style={{fontSize:9,color:C.text3,marginBottom:3,fontFamily:"'DM Mono',monospace",letterSpacing:1}}>MACD</div>
-          <span style={{fontSize:10,color:data.macdHist>0?C.green:data.macdHist<0?C.red:C.text3,fontFamily:"'DM Mono',monospace"}}>
-            {data.macdHist!=null?(data.macdHist>0?"▲ Bull":"▼ Bear"):"—"}
-          </span>
-        </div>
-        <div style={{textAlign:"right"}}>
-          <div style={{fontSize:9,color:C.text3,marginBottom:3,fontFamily:"'DM Mono',monospace",letterSpacing:1}}>SIGNALS</div>
-          <span style={{fontSize:10,color:C.green,fontFamily:"'DM Mono',monospace"}}>{sig.bullPoints}↑</span>
-          <span style={{fontSize:10,color:C.text3,fontFamily:"'DM Mono',monospace"}}> / </span>
-          <span style={{fontSize:10,color:C.red,fontFamily:"'DM Mono',monospace"}}>{sig.bearPoints}↓</span>
-        </div>
-      </div>
-      {(data.ma50||data.ma200)&&(
-        <div style={{display:"flex",gap:5,marginTop:8,flexWrap:"wrap"}}>
-          <MATag price={data.price} ma={data.ma50} label="MA50"/>
-          <MATag price={data.price} ma={data.ma200} label="MA200"/>
-          {data.support&&<Chip label={`Sup $${data.support}`} color={C.green} size={9}/>}
-          {data.resistance&&<Chip label={`Res $${data.resistance}`} color={C.red} size={9}/>}
+      ):(
+        <div style={card}>
+          <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,fontSize:11,color:C.text2,letterSpacing:2,fontFamily:"'DM Mono',monospace"}}>📋 ALL TRADES ({trades.length})</div>
+          {trades.map((t,i)=>(
+            <div key={t.id} style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                <div>
+                  <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4}}>
+                    <span style={{fontSize:15,fontWeight:600,color:C.text}}>{t.ticker}</span>
+                    <Chip label={t.direction} color={t.direction==="BULLISH"?C.green:C.red} size={10}/>
+                    <Chip label={t.strategy?.replace(" Debit Spread","DS")} color={C.blue} size={9}/>
+                  </div>
+                  <div style={{fontSize:11,color:C.text3}}>Entry: ${t.price?.toFixed(2)} · Score: {t.score}/100 · {t.expiration}</div>
+                  <div style={{fontSize:10,color:C.text3,marginTop:2}}>{new Date(t.date).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</div>
+                </div>
+                <button onClick={()=>onDeleteTrade(t.id)} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:18}}>×</button>
+              </div>
+              {/* Result selector */}
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <span style={{fontSize:10,color:C.text3,fontFamily:"'DM Mono',monospace"}}>RESULT:</span>
+                {["Open","Win","Loss","Expired"].map(r=>(
+                  <button key={r} onClick={()=>onUpdateTrade(t.id,{result:r})} style={{padding:"3px 10px",borderRadius:6,border:`1px solid ${t.result===r?(r==="Win"?C.green:r==="Loss"?C.red:C.gold):C.border}`,background:t.result===r?(r==="Win"?"rgba(0,200,150,0.15)":r==="Loss"?"rgba(240,70,90,0.15)":"rgba(201,168,76,0.15)"):"transparent",color:t.result===r?(r==="Win"?C.green:r==="Loss"?C.red:C.gold):C.text3,fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>{r}</button>
+                ))}
+              </div>
+              {t.notes&&<div style={{fontSize:11,color:C.text2,marginTop:6,lineHeight:1.5}}>{t.notes}</div>}
+            </div>
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-// ── Candle data fetcher ───────────────────────────────────────────────────────
-async function fetchCandleData(ticker,range){
-  try{
-    const now=Math.floor(Date.now()/1000);
-    const days=range==="1W"?7:range==="1M"?30:range==="3M"?90:180;
-    const resolution=range==="1W"?"60":range==="1M"?"D":"D";
-    const from=now-86400*days;
-    const r=await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${ticker}&resolution=${resolution}&from=${from}&to=${now}&token=${FINNHUB_KEY}`);
-    const d=await r.json();
-    if(d.s!=="ok"||!d.c?.length) return null;
-    return{opens:d.o,highs:d.h,lows:d.l,closes:d.c,times:d.t,volume:d.v};
-  }catch{return null;}
-}
-
-// ── Candlestick Chart Component ───────────────────────────────────────────────
-function CandlestickChart({candles,range,onRangeChange,ticker}){
-  const W=340,H=160,PAD=8;
-  if(!candles||!candles.closes?.length) return(
-    <div style={{height:H,display:"flex",alignItems:"center",justifyContent:"center",color:C.text3,fontFamily:"'DM Mono',monospace",fontSize:11}}>
-      Loading chart data…
-    </div>
-  );
-
-  const{opens,highs,lows,closes,times}=candles;
-  const n=closes.length;
-  const minP=Math.min(...lows)*0.999;
-  const maxP=Math.max(...highs)*1.001;
-  const scaleY=v=>H-PAD-((v-minP)/(maxP-minP))*(H-PAD*2);
-  const barW=Math.max(2,Math.floor((W-PAD*2)/n)-1);
-  const barGap=Math.max(1,(W-PAD*2)/n);
-
-  const lastClose=closes[n-1];
-  const firstClose=closes[0];
-  const totalChange=((lastClose-firstClose)/firstClose)*100;
-
-  // Price labels
-  const priceLabels=[minP,minP+(maxP-minP)*0.25,minP+(maxP-minP)*0.5,minP+(maxP-minP)*0.75,maxP];
-
-  return(
-    <div style={{background:C.bg3,borderRadius:12,padding:"12px 8px 8px",border:`1px solid ${C.border}`}}>
-      {/* Range selector */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,paddingLeft:4,paddingRight:4}}>
-        <div style={{fontSize:11,color:C.text3,fontFamily:"'DM Mono',monospace"}}>{ticker} · {range}</div>
-        <div style={{display:"flex",gap:4}}>
-          {["1W","1M","3M","6M"].map(r=>(
-            <button key={r} onClick={()=>onRangeChange(r)} style={{padding:"3px 8px",borderRadius:6,border:range===r?`1px solid ${C.gold}`:`1px solid ${C.border}`,background:range===r?"rgba(201,168,76,0.15)":"transparent",color:range===r?C.goldLt:C.text3,fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>{r}</button>
-          ))}
-        </div>
-      </div>
-
-      {/* Chart */}
-      <div style={{position:"relative"}}>
-        <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{overflow:"visible"}}>
-          {/* Grid lines */}
-          {priceLabels.map((p,i)=>(
-            <g key={i}>
-              <line x1={PAD} x2={W-PAD} y1={scaleY(p)} y2={scaleY(p)} stroke="rgba(255,255,255,0.04)" strokeWidth="1"/>
-              <text x={W-PAD+2} y={scaleY(p)+3} fontSize="7" fill={C.text3} fontFamily="monospace">${p.toFixed(0)}</text>
-            </g>
-          ))}
-          {/* Candles */}
-          {closes.map((_,i)=>{
-            const x=PAD+i*barGap;
-            const bull=closes[i]>=opens[i];
-            const color=bull?C.green:C.red;
-            const bodyTop=scaleY(Math.max(opens[i],closes[i]));
-            const bodyBot=scaleY(Math.min(opens[i],closes[i]));
-            const bodyH=Math.max(1,bodyBot-bodyTop);
-            return(
-              <g key={i}>
-                {/* Wick */}
-                <line x1={x+barW/2} x2={x+barW/2} y1={scaleY(highs[i])} y2={scaleY(lows[i])} stroke={color} strokeWidth="1" opacity="0.7"/>
-                {/* Body */}
-                <rect x={x} y={bodyTop} width={barW} height={bodyH} fill={color} opacity="0.85" rx="0.5"/>
-              </g>
-            );
-          })}
-          {/* Current price line */}
-          <line x1={PAD} x2={W-PAD} y1={scaleY(lastClose)} y2={scaleY(lastClose)} stroke={C.gold} strokeWidth="0.8" strokeDasharray="3,3" opacity="0.6"/>
-        </svg>
-      </div>
-
-      {/* Summary bar */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:6,paddingLeft:4,paddingRight:4}}>
-        <div style={{fontSize:10,color:C.text3,fontFamily:"'DM Mono',monospace"}}>{n} candles · {new Date(times[0]*1000).toLocaleDateString("en-US",{month:"short",day:"numeric"})} → now</div>
-        <div style={{fontSize:11,fontFamily:"'DM Mono',monospace",color:totalChange>=0?C.green:C.red,fontWeight:600}}>{totalChange>=0?"+":""}{totalChange.toFixed(2)}% this period</div>
-      </div>
-    </div>
-  );
-}
-
-function StockDetail({data,onClose}){
-  const sig=getSignalAndConfidence(data);
-  const iv=getIVLabel(data.ivRank);
-  const [chartAnalysis,setChartAnalysis]=useState(null);
-  const [chartLoading,setChartLoading]=useState(false);
-  const [candles,setCandles]=useState(null);
-  const [candleRange,setCandleRange]=useState("3M");
-  const [candleLoading,setCandleLoading]=useState(false);
-
-  useEffect(()=>{
-    fetchCandleData(data.ticker,candleRange).then(setCandles);
-  },[data.ticker,candleRange]);
-
-  const handleChartAnalysis=async()=>{
-    setChartLoading(true);setChartAnalysis(null);
-    const result=await getChartAnalysis(data);
-    setChartAnalysis(result);setChartLoading(false);
+// ── Log Trade Modal ───────────────────────────────────────────────────────────
+function LogTradeModal({stock,scoreData,onSave,onClose}){
+  const [notes,setNotes]=useState("");
+  const handleSave=()=>{
+    const trade={
+      id:Date.now(),date:new Date().toISOString(),
+      ticker:stock.ticker,price:stock.price,change:stock.change,
+      direction:scoreData.direction,strategy:scoreData.strategy,
+      expiration:scoreData.expiration,score:scoreData.score,
+      confidence:scoreData.confidence,result:"Open",notes,
+      entryTrigger:scoreData.reasons[0]||"",
+      warning:scoreData.warnings[0]||""
+    };
+    onSave(trade);onClose();
   };
-
   return(
-    <div style={{position:"fixed",inset:0,background:C.bg,zIndex:200,display:"flex",flexDirection:"column",overflowY:"auto",animation:"fadeUp 0.2s ease"}}>
-      {/* Header */}
-      <div style={{padding:"16px",borderBottom:`1px solid ${C.border}`,background:C.bg,position:"sticky",top:0,zIndex:10}}>
-        <button onClick={onClose} style={{...ghostBtn,display:"flex",alignItems:"center",gap:6,marginBottom:16,padding:"8px 14px"}}>
-          <span>←</span><span style={{fontSize:13}}>Back</span>
-        </button>
-        <div style={{display:"flex",alignItems:"center",gap:14}}>
-          <TickerLogo ticker={data.ticker} size={52}/>
-          <div>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
-              <span style={{fontSize:22,fontWeight:600,color:C.text}}>{data.ticker}</span>
-              <LiveDot live={data.live}/>
-              <Chip label={sig.label} color={sig.color}/>
-            </div>
-            <div style={{fontSize:12,color:C.text3,marginBottom:4}}>{getCompanyName(data.ticker)}</div>
-            <div style={{fontSize:28,fontWeight:300,color:C.text,fontFamily:"'DM Serif Display',serif"}}>${data.price?.toFixed(2)}</div>
-            <div style={{fontSize:13,color:data.change>=0?C.green:C.red,fontFamily:"'DM Mono',monospace"}}>{data.change>=0?"+":""}{data.change?.toFixed(2)}% today</div>
-          </div>
-        </div>
-      </div>
-
-      <div style={{padding:16,display:"flex",flexDirection:"column",gap:12}}>
-        {/* Candlestick Chart */}
-        <CandlestickChart candles={candles} range={candleRange} onRangeChange={setCandleRange} ticker={data.ticker}/>
-
-        {/* OHLC */}
-        {data.live&&(
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}>
-            {[["OPEN",data.open,C.text2],["HIGH",data.high,C.green],["LOW",data.low,C.red],["PREV",data.prevClose,C.text2]].map(([l,v,c])=>(
-              <div key={l} style={{background:C.bg2,borderRadius:10,padding:"10px",textAlign:"center",border:`1px solid ${C.border}`}}>
-                <div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:4}}>{l}</div>
-                <div style={{fontSize:13,fontWeight:500,color:c,fontFamily:"'DM Mono',monospace"}}>${v?.toFixed(2)||"—"}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Chart Indicators */}
-        <div style={{...card,marginBottom:0}}>
-          <div style={cardHdr}>📊 CHART INDICATORS</div>
-          <div style={{padding:16,display:"flex",flexDirection:"column",gap:14}}>
-            {/* RSI */}
-            <div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                <span style={{fontSize:12,color:C.text2,fontWeight:500}}>RSI ({data.rsi?.toFixed(0)})</span>
-                <Chip label={data.rsi>70?"OVERBOUGHT":data.rsi<30?"OVERSOLD":"NEUTRAL"} color={data.rsi>70?C.red:data.rsi<30?C.green:C.amber} size={10}/>
-              </div>
-              <div style={{height:6,background:C.bg3,borderRadius:999,overflow:"hidden",position:"relative"}}>
-                <div style={{position:"absolute",left:"30%",right:"30%",top:0,bottom:0,background:"rgba(255,255,255,0.06)"}}/>
-                <div style={{width:`${data.rsi||50}%`,height:"100%",background:data.rsi>70?C.red:data.rsi<30?C.green:C.amber,borderRadius:999,transition:"width 0.6s"}}/>
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",marginTop:3}}>
-                <span style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace"}}>Oversold 30</span>
-                <span style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace"}}>70 Overbought</span>
-              </div>
-            </div>
-            {/* Moving Averages */}
-            <div>
-              <div style={{fontSize:12,color:C.text2,fontWeight:500,marginBottom:8}}>Moving Averages</div>
-              <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                {data.ma50&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",background:C.bg3,borderRadius:8}}>
-                  <span style={{fontSize:12,color:C.text2}}>MA 50-day</span>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:12,fontFamily:"'DM Mono',monospace",color:C.text}}>${data.ma50?.toFixed(2)}</span>
-                    <Chip label={data.price>data.ma50?"Above ↑":"Below ↓"} color={data.price>data.ma50?C.green:C.red} size={10}/>
-                  </div>
-                </div>}
-                {data.ma200&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",background:C.bg3,borderRadius:8}}>
-                  <span style={{fontSize:12,color:C.text2}}>MA 200-day</span>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:12,fontFamily:"'DM Mono',monospace",color:C.text}}>${data.ma200?.toFixed(2)}</span>
-                    <Chip label={data.price>data.ma200?"Above ↑":"Below ↓"} color={data.price>data.ma200?C.green:C.red} size={10}/>
-                  </div>
-                </div>}
-                {!data.ma50&&!data.ma200&&<div style={{fontSize:12,color:C.text3,fontFamily:"'DM Mono',monospace"}}>Insufficient data for MA calculation</div>}
-              </div>
-            </div>
-            {/* MACD */}
-            {data.macd!=null&&<div>
-              <div style={{fontSize:12,color:C.text2,fontWeight:500,marginBottom:8}}>MACD</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
-                {[["MACD",data.macd],["Signal",data.macdSignal],["Histogram",data.macdHist]].map(([l,v])=>(
-                  <div key={l} style={{background:C.bg3,borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
-                    <div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:4}}>{l.toUpperCase()}</div>
-                    <div style={{fontSize:12,fontFamily:"'DM Mono',monospace",color:v>0?C.green:v<0?C.red:C.text2,fontWeight:500}}>{v?.toFixed(3)}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{marginTop:8,padding:"8px 10px",background:data.macdHist>0?"rgba(0,200,150,0.08)":"rgba(240,70,90,0.08)",borderRadius:8,border:`1px solid ${data.macdHist>0?C.green:C.red}25`}}>
-                <span style={{fontSize:12,color:data.macdHist>0?C.green:C.red}}>{data.macdHist>0?"▲ Bullish crossover — momentum building upward":"▼ Bearish crossover — momentum fading"}</span>
-              </div>
-            </div>}
-            {/* Bollinger Bands */}
-            {data.bbUpper&&<div>
-              <div style={{fontSize:12,color:C.text2,fontWeight:500,marginBottom:8}}>Bollinger Bands</div>
-              <div style={{position:"relative",height:32,background:C.bg3,borderRadius:8,overflow:"hidden"}}>
-                <div style={{position:"absolute",top:0,bottom:0,left:0,right:0,background:`linear-gradient(90deg,transparent,rgba(59,130,246,0.08),transparent)`}}/>
-                {[["Upper",data.bbUpper,C.red],["Mid",data.bbMid,C.text2],["Lower",data.bbLower,C.green]].map(([l,v,c])=>(
-                  <div key={l} style={{position:"absolute",top:"50%",transform:"translateY(-50%)",left:`${Math.max(2,Math.min(95,((v-data.bbLower)/(data.bbUpper-data.bbLower))*90+5))}%`,fontSize:8,color:c,fontFamily:"'DM Mono',monospace",whiteSpace:"nowrap"}}>${v?.toFixed(0)}</div>
-                ))}
-                <div style={{position:"absolute",top:"50%",transform:"translateY(-50%)",left:`${Math.max(2,Math.min(95,((data.price-data.bbLower)/(data.bbUpper-data.bbLower))*90+5))}%`,width:8,height:8,borderRadius:"50%",background:C.gold,boxShadow:`0 0 6px ${C.gold}`,marginLeft:-4}}/>
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace"}}>
-                <span>Lower ${data.bbLower?.toFixed(2)}</span>
-                <span style={{color:C.gold}}>Price ${data.price?.toFixed(2)}</span>
-                <span>Upper ${data.bbUpper?.toFixed(2)}</span>
-              </div>
-            </div>}
-            {/* Support / Resistance */}
-            {(data.support||data.resistance)&&<div>
-              <div style={{fontSize:12,color:C.text2,fontWeight:500,marginBottom:8}}>Support & Resistance</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-                {data.support&&<div style={{background:"rgba(0,200,150,0.08)",border:`1px solid ${C.green}25`,borderRadius:8,padding:"8px 12px"}}>
-                  <div style={{fontSize:9,color:C.green,fontFamily:"'DM Mono',monospace",marginBottom:3}}>SUPPORT</div>
-                  <div style={{fontSize:15,fontWeight:500,color:C.green,fontFamily:"'DM Mono',monospace"}}>${data.support}</div>
-                  <div style={{fontSize:10,color:C.text3,marginTop:2}}>{((data.price-data.support)/data.support*100).toFixed(1)}% above</div>
-                </div>}
-                {data.resistance&&<div style={{background:"rgba(240,70,90,0.08)",border:`1px solid ${C.red}25`,borderRadius:8,padding:"8px 12px"}}>
-                  <div style={{fontSize:9,color:C.red,fontFamily:"'DM Mono',monospace",marginBottom:3}}>RESISTANCE</div>
-                  <div style={{fontSize:15,fontWeight:500,color:C.red,fontFamily:"'DM Mono',monospace"}}>${data.resistance}</div>
-                  <div style={{fontSize:10,color:C.text3,marginTop:2}}>{((data.resistance-data.price)/data.price*100).toFixed(1)}% above</div>
-                </div>}
-              </div>
-            </div>}
-          </div>
-        </div>
-
-        {/* Sentiment */}
-        <div style={card}>
-          <div style={cardHdr}>📰 NEWS SENTIMENT</div>
-          <div style={{padding:16}}>
-            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-              <Chip label={`${getSentEmoji(data.sentiment)} ${data.sentiment.toUpperCase()}`} color={getSentColor(data.sentiment)} size={11}/>
-              <div style={{flex:1,height:4,background:C.bg3,borderRadius:999,overflow:"hidden"}}>
-                <div style={{width:`${data.sentimentScore||50}%`,height:"100%",background:getSentColor(data.sentiment),borderRadius:999}}/>
-              </div>
-              <span style={{fontSize:11,color:C.text2,fontFamily:"'DM Mono',monospace"}}>{data.sentimentScore||50}%</span>
-            </div>
-            {data.newsHeadlines?.length>0?(
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                {data.newsHeadlines.map((n,i)=>(
-                  <div key={i} style={{padding:"10px 12px",borderRadius:10,background:C.bg3,border:`1px solid ${getSentColor(n.sentiment)}20`}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-                      <span style={{fontSize:9,color:getSentColor(n.sentiment),fontFamily:"'DM Mono',monospace",fontWeight:500}}>{getSentEmoji(n.sentiment)} {n.sentiment.toUpperCase()}</span>
-                      <span style={{fontSize:9,color:C.text3}}>· {n.source}</span>
-                    </div>
-                    <div style={{fontSize:12,color:C.text,lineHeight:1.5}}>{n.headline}</div>
-                  </div>
-                ))}
-              </div>
-            ):<div style={{fontSize:12,color:C.text3,fontFamily:"'DM Mono',monospace"}}>No recent news</div>}
-          </div>
-        </div>
-
-        {/* Confidence + IV */}
+    <div style={{position:"fixed",inset:0,background:"rgba(5,10,25,0.95)",zIndex:300,display:"flex",flexDirection:"column",justifyContent:"flex-end",animation:"fadeUp 0.2s ease"}}>
+      <div style={{background:C.bg2,borderRadius:"20px 20px 0 0",padding:20,border:`1px solid ${C.border}`}}>
+        <div style={{fontSize:16,fontWeight:600,color:C.text,marginBottom:4}}>Log Trade — {stock.ticker}</div>
+        <div style={{fontSize:12,color:C.text3,marginBottom:16}}>{scoreData.strategy} · {scoreData.expiration} · Score {scoreData.score}/100</div>
+        <label style={lbl}>NOTES (optional)</label>
+        <textarea style={{...inp,minHeight:70,lineHeight:1.5,marginBottom:12}} placeholder="Entry price paid, specific strikes used, your thesis..." value={notes} onChange={e=>setNotes(e.target.value)}/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div style={{...card,marginBottom:0,padding:14}}>
-            <div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:6}}>SIGNAL</div>
-            <div style={{fontSize:20,fontWeight:500,color:sig.color,fontFamily:"'DM Serif Display',serif",marginBottom:4}}>{sig.emoji} {sig.label}</div>
-            <Chip label={sig.confidence} color={sig.confColor} size={11}/>
-            <div style={{fontSize:10,color:C.text3,marginTop:6}}>{sig.bullPoints} bull · {sig.bearPoints} bear signals</div>
-          </div>
-          <div style={{...card,marginBottom:0,padding:14}}>
-            <div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:6}}>IV RANK {iv.ivLive?"● LIVE":""}</div>
-            <div style={{fontSize:20,fontWeight:500,color:getIVLabel(data.ivRank).color,fontFamily:"'DM Serif Display',serif",marginBottom:4}}>{data.ivRank?.toFixed(0)}%</div>
-            <div style={{fontSize:11,color:C.text2,lineHeight:1.4}}>{getIVLabel(data.ivRank).label}</div>
-          </div>
-        </div>
-
-        {/* Signal breakdown */}
-        {sig.reasons?.length>0&&(
-          <div style={{...card,marginBottom:0}}>
-            <div style={cardHdr}>📋 Why {sig.label}? ({sig.agreePct}% signals agree)</div>
-            <div style={{padding:"10px 16px",display:"flex",flexDirection:"column",gap:6}}>
-              {sig.reasons.map((r,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:8,background:r.bull?"rgba(0,200,150,0.06)":"rgba(240,70,90,0.06)"}}>
-                  <span style={{fontSize:12,color:r.bull?C.green:C.red,flexShrink:0}}>{r.bull?"▲":"▼"}</span>
-                  <span style={{fontSize:12,color:C.text2}}>{r.txt}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Earnings warning */}
-        {data.earningsDays<21&&data.earningsDays<999&&(
-          <div style={{background:"rgba(245,158,11,0.08)",border:`1px solid ${C.amber}30`,borderRadius:12,padding:14}}>
-            <div style={{fontSize:11,fontWeight:600,color:C.amber,marginBottom:4}}>⚠ Earnings in {data.earningsDays} days {data.earningsTime==="bmo"?"(Before Market Open)":data.earningsTime==="amc"?"(After Market Close)":""}</div>
-            <div style={{fontSize:12,color:C.text2,lineHeight:1.5}}>Options premiums inflate before earnings. Size down or use defined-risk spreads to limit exposure.</div>
-          </div>
-        )}
-        {data.volumeSpike&&(
-          <div style={{background:"rgba(201,168,76,0.08)",border:`1px solid ${C.gold}30`,borderRadius:12,padding:14}}>
-            <div style={{fontSize:11,fontWeight:600,color:C.gold,marginBottom:4}}>⚡ Unusual Volume Detected</div>
-            <div style={{fontSize:12,color:C.text2}}>Current volume is significantly above the 20-day average. Watch for a potential breakout or reversal.</div>
-          </div>
-        )}
-
-        {/* ── CHART ANALYSIS BUTTON ── */}
-        <div style={{background:"linear-gradient(135deg,rgba(201,168,76,0.08),rgba(201,168,76,0.03))",border:"1px solid rgba(201,168,76,0.25)",borderRadius:14,padding:16}}>
-          <div style={{fontSize:13,fontWeight:600,color:"#f0d080",marginBottom:6}}>💬 Plain English Chart Reading</div>
-          <div style={{fontSize:12,color:"#8899bb",lineHeight:1.6,marginBottom:12}}>Tap below and I will explain what the chart is saying in plain English — no jargon, no confusing terms. Just honest advice on whether now is a good time to buy calls, buy puts, or wait.</div>
-          {!chartAnalysis&&!chartLoading&&(
-            <button onClick={handleChartAnalysis} style={{background:"linear-gradient(135deg,#c9a84c,#f0d080,#c9a84c)",border:"none",borderRadius:10,padding:"12px",color:"#0a0f1e",fontWeight:700,fontFamily:"DM Sans,sans-serif",fontSize:13,cursor:"pointer",letterSpacing:0.5,width:"100%",boxShadow:"0 4px 20px rgba(201,168,76,0.3)"}}>
-              💬 Read the Chart for Me
-            </button>
-          )}
-          {chartLoading&&(
-            <div style={{textAlign:"center",padding:"20px 0",color:"#c9a84c",fontFamily:"DM Mono,monospace",fontSize:12,letterSpacing:1}}>
-              <div style={{fontSize:22,display:"inline-block",animation:"spin 1s linear infinite",marginBottom:8}}>◌</div>
-              <div>Reading the chart...</div>
-            </div>
-          )}
-          {chartAnalysis&&(
-            <div style={{animation:"fadeUp 0.3s ease"}}>
-              <div style={{fontSize:13,color:"#e8edf5",lineHeight:1.8,marginBottom:14}}>{chartAnalysis}</div>
-              <button onClick={handleChartAnalysis} style={{background:"transparent",border:"1px solid rgba(201,168,76,0.3)",borderRadius:10,padding:"9px 16px",color:"#c9a84c",fontFamily:"DM Sans,sans-serif",fontSize:12,cursor:"pointer",width:"100%"}}>
-                ⟳ Refresh Analysis
-              </button>
-            </div>
-          )}
+          <button onClick={onClose} style={{...ghostBtn,textAlign:"center"}}>Cancel</button>
+          <button onClick={handleSave} style={{...goldBtn,marginTop:0}}>Save Trade</button>
         </div>
       </div>
     </div>
   );
 }
 
-function PickCard({pick,timeframe,stocks}){
-  if(!pick) return null;
-  const sd=stocks.find(s=>s.ticker===pick.ticker);
-  const bull=pick.direction==="BULLISH";
-  return(
-    <div style={{background:C.bg2,border:`1px solid ${bull?C.green:C.red}25`,borderRadius:16,overflow:"hidden",marginBottom:14,animation:"fadeUp 0.3s ease"}}>
-      <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:bull?"rgba(0,200,150,0.05)":"rgba(240,70,90,0.05)"}}>
-        <div style={{fontSize:11,color:C.gold,fontFamily:"'DM Mono',monospace",fontWeight:500,letterSpacing:1}}>🏆 {timeframe}</div>
-        <div style={{fontSize:10,color:C.text3,fontFamily:"'DM Mono',monospace"}}>{new Date().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</div>
-      </div>
-      <div style={{padding:16}}>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
-          <TickerLogo ticker={pick.ticker} size={48}/>
-          <div style={{flex:1}}>
-            <div style={{fontSize:24,fontWeight:400,color:C.text,fontFamily:"'DM Serif Display',serif",marginBottom:4}}>{pick.ticker}</div>
-            <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              <Chip label={`${bull?"▲":"▼"} ${pick.direction}`} color={bull?C.green:C.red} size={12}/>
-              <span style={{fontSize:12,color:C.text2}}>Confidence <span style={{color:pick.confidence>=7?C.green:pick.confidence>=5?C.amber:C.red,fontWeight:600}}>{pick.confidence}/10</span></span>
-            </div>
-          </div>
-          {sd&&<div style={{textAlign:"right",flexShrink:0}}>
-            <div style={{fontSize:16,fontWeight:500,fontFamily:"'DM Mono',monospace",color:C.text}}>${sd.price?.toFixed(2)}</div>
-            <div style={{fontSize:12,color:sd.change>=0?C.green:C.red,fontFamily:"'DM Mono',monospace"}}>{sd.change>=0?"+":""}{sd.change?.toFixed(2)}%</div>
-          </div>}
-        </div>
-        <div style={{fontSize:13,color:C.text2,lineHeight:1.7,marginBottom:12}}>{pick.reasoning}</div>
-        <div style={{background:C.bg3,borderRadius:10,padding:12,marginBottom:8,border:`1px solid ${C.gold}20`}}>
-          <div style={{fontSize:10,color:C.gold,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:5}}>SUGGESTED PLAY</div>
-          <div style={{fontSize:13,color:C.text,fontWeight:500}}>{pick.suggestedPlay}</div>
-        </div>
-        <div style={{background:"rgba(240,70,90,0.06)",borderRadius:10,padding:12,border:`1px solid ${C.red}20`}}>
-          <div style={{fontSize:10,color:C.red,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:5}}>⚠ KEY RISK</div>
-          <div style={{fontSize:12,color:C.text2,lineHeight:1.5}}>{pick.keyRisk}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function EodPickCard({pick,timeframe}){
-  if(!pick) return null;
-  const bull=pick.direction==="BULLISH";
-  return(
-    <div style={{background:C.bg2,border:`1px solid rgba(59,130,246,0.25)`,borderRadius:16,overflow:"hidden",marginBottom:14,animation:"fadeUp 0.3s ease"}}>
-      <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:"rgba(59,130,246,0.05)"}}>
-        <div style={{fontSize:11,color:"#60a5fa",fontFamily:"'DM Mono',monospace",fontWeight:500,letterSpacing:1}}>🌙 {timeframe}</div>
-        <div style={{fontSize:10,color:C.text3,fontFamily:"'DM Mono',monospace"}}>{new Date().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</div>
-      </div>
-      <div style={{padding:16}}>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
-          <TickerLogo ticker={pick.ticker} size={48}/>
-          <div style={{flex:1}}>
-            <div style={{fontSize:11,color:C.text3,marginBottom:2}}>{getCompanyName(pick.ticker)}</div>
-            <div style={{fontSize:22,fontWeight:400,color:C.text,fontFamily:"'DM Serif Display',serif",marginBottom:6}}>{pick.ticker}</div>
-            <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              <Chip label={`${bull?"▲":"▼"} ${pick.direction}`} color={bull?C.green:C.red} size={12}/>
-              <span style={{fontSize:12,color:C.text2}}>Confidence <span style={{color:pick.confidence>=7?C.green:pick.confidence>=5?C.amber:C.red,fontWeight:600}}>{pick.confidence}/10</span></span>
-            </div>
-          </div>
-        </div>
-        <div style={{fontSize:13,color:C.text2,lineHeight:1.7,marginBottom:12}}>{pick.reasoning}</div>
-        <div style={{background:C.bg3,borderRadius:10,padding:12,marginBottom:8,border:`1px solid ${C.gold}20`}}>
-          <div style={{fontSize:10,color:C.gold,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:5}}>SUGGESTED PLAY</div>
-          <div style={{fontSize:13,color:C.text,fontWeight:500}}>{pick.suggestedPlay}</div>
-        </div>
-        {pick.bestEntryNote&&(
-          <div style={{background:"rgba(59,130,246,0.08)",border:`1px solid rgba(59,130,246,0.2)`,borderRadius:10,padding:12,marginBottom:8}}>
-            <div style={{fontSize:10,color:"#60a5fa",fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:5}}>📍 BEST ENTRY</div>
-            <div style={{fontSize:12,color:C.text2,lineHeight:1.5}}>{pick.bestEntryNote}</div>
-          </div>
-        )}
-        <div style={{background:"rgba(240,70,90,0.06)",border:`1px solid ${C.red}20`,borderRadius:10,padding:12}}>
-          <div style={{fontSize:10,color:C.red,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:5}}>⚠ KEY RISK</div>
-          <div style={{fontSize:12,color:C.text2,lineHeight:1.5}}>{pick.keyRisk}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function EarningsCalendar({earnings,stocks}){
-  if(earnings.length===0) return(
-    <div style={{padding:40,textAlign:"center"}}>
-      <div style={{fontSize:32,marginBottom:12}}>📅</div>
-      <div style={{fontSize:14,color:C.text2,marginBottom:6}}>No Upcoming Earnings</div>
-      <div style={{fontSize:12,color:C.text3}}>No earnings in next 21 days for your watchlist</div>
-    </div>
-  );
-  const thisWeek=earnings.filter(e=>e.daysAway<=7);
-  const nextWeek=earnings.filter(e=>e.daysAway>7&&e.daysAway<=14);
-  const later=earnings.filter(e=>e.daysAway>14);
-  const Row=({e})=>{
-    const urg=e.daysAway<=3?C.red:e.daysAway<=7?C.amber:C.green;
-    const sd=stocks.find(s=>s.ticker===e.ticker);
-    return(
-      <div style={{display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderBottom:`1px solid ${C.border}`}}>
-        <TickerLogo ticker={e.ticker} size={40}/>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-            <span style={{fontSize:15,fontWeight:600,color:C.text}}>{e.ticker}</span>
-            <span style={{fontSize:11,color:C.text3,display:"block",marginTop:1}}>{getCompanyName(e.ticker)}</span>
-            <span style={{fontSize:12,color:urg,fontFamily:"'DM Mono',monospace",fontWeight:600}}>{e.daysAway===0?"TODAY":e.daysAway===1?"TOMORROW":`${e.daysAway}d`}</span>
-          </div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-            <span style={{fontSize:11,color:C.text3}}>{new Date(e.date+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})}</span>
-            {e.hour&&<Chip label={e.hour==="bmo"?"☀ Pre-Market":e.hour==="amc"?"🌙 After-Hours":"🕐 TBD"} color={e.hour==="bmo"?C.amber:C.blue} size={10}/>}
-            {sd&&<Chip label={`IV ${sd.ivRank?.toFixed(0)}%`} color={getIVLabel(sd.ivRank).color} size={10}/>}
-            {sd&&<Chip label={`${getSentEmoji(sd.sentiment)} ${sd.sentiment}`} color={getSentColor(sd.sentiment)} size={10}/>}
-          </div>
-          {sd?.ma50&&sd?.ma200&&<div style={{display:"flex",gap:5,marginTop:5}}>
-            <MATag price={sd.price} ma={sd.ma50} label="MA50"/>
-            <MATag price={sd.price} ma={sd.ma200} label="MA200"/>
-          </div>}
-        </div>
-        <div style={{width:8,height:8,borderRadius:"50%",background:urg,flexShrink:0,boxShadow:`0 0 8px ${urg}`}}/>
-      </div>
-    );
-  };
-  const Sec=({title,items,color})=>items.length>0?(
-    <div>
-      <div style={{padding:"10px 16px",fontSize:10,color,fontFamily:"'DM Mono',monospace",fontWeight:500,letterSpacing:2,background:"rgba(255,255,255,0.02)",borderBottom:`1px solid ${C.border}`}}>{title}</div>
-      {items.map(e=><Row key={e.ticker+e.date} e={e}/>)}
-    </div>
-  ):null;
-  return(
-    <>
-      <Sec title="🔴 THIS WEEK" items={thisWeek} color={C.red}/>
-      <Sec title="🟡 NEXT WEEK" items={nextWeek} color={C.amber}/>
-      <Sec title="🟢 COMING UP" items={later} color={C.green}/>
-    </>
-  );
-}
-
+// ── Loading Screen ────────────────────────────────────────────────────────────
 function LoadingScreen({progress,total,current}){
   const pct=total>0?Math.round((progress/total)*100):0;
   return(
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:40}}>
-      <div style={{width:60,height:60,borderRadius:16,background:`linear-gradient(135deg,${C.gold},${C.goldLt})`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 0 40px rgba(201,168,76,0.4)`,marginBottom:28,animation:"glow 2s infinite"}}>
-        <span style={{fontSize:28,fontWeight:400,color:"#0a0f1e",fontFamily:"'DM Serif Display',serif",fontStyle:"italic"}}>L</span>
+      <div style={{width:56,height:56,borderRadius:14,background:`linear-gradient(135deg,${C.gold},${C.goldLt})`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 0 30px rgba(201,168,76,0.5)`,marginBottom:24,animation:"glow 2s infinite"}}>
+        <span style={{fontSize:26,fontWeight:400,color:"#0a0f1e",fontFamily:"'DM Serif Display',serif",fontStyle:"italic"}}>L</span>
       </div>
-      <div style={{fontSize:22,fontWeight:400,color:C.text,fontFamily:"'DM Serif Display',serif",marginBottom:6}}>Lucas Trade Intel</div>
-      <div style={{fontSize:10,color:C.text3,letterSpacing:3,fontFamily:"'DM Mono',monospace",marginBottom:32}}>LOADING LIVE MARKET DATA</div>
-      <div style={{width:"100%",maxWidth:280,background:C.bg3,borderRadius:999,height:4,marginBottom:12,overflow:"hidden"}}>
-        <div style={{width:`${pct}%`,height:"100%",background:`linear-gradient(90deg,${C.gold},${C.goldLt})`,borderRadius:999,transition:"width 0.4s ease"}}/>
+      <div style={{fontSize:20,fontWeight:400,color:C.text,fontFamily:"'DM Serif Display',serif",marginBottom:4}}>Lucas Trade Intel</div>
+      <div style={{fontSize:9,color:C.text3,letterSpacing:3,fontFamily:"'DM Mono',monospace",marginBottom:28}}>SWING OPTIONS ASSISTANT</div>
+      <div style={{width:"100%",maxWidth:260,background:C.bg3,borderRadius:999,height:4,marginBottom:10,overflow:"hidden"}}>
+        <div style={{width:`${pct}%`,height:"100%",background:`linear-gradient(90deg,${C.gold},${C.goldLt})`,borderRadius:999,transition:"width 0.4s"}}/>
       </div>
-      <div style={{fontSize:12,color:C.text3,fontFamily:"'DM Mono',monospace",textAlign:"center",lineHeight:1.8}}>
-        {current?`Fetching ${current}`:""}<br/>{pct}%
+      <div style={{fontSize:11,color:C.text3,fontFamily:"'DM Mono',monospace",textAlign:"center",lineHeight:1.8}}>
+        {current?`Analyzing ${current}…`:""}<br/>{pct}%
       </div>
     </div>
   );
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ── Main App ──────────────────────────────────────────────────────────────────
 function App(){
   const [tab,setTab]=useState("scanner");
   const [stocks,setStocks]=useState([]);
+  const [scoreMap,setScoreMap]=useState({});
   const [loading,setLoading]=useState(true);
   const [loadProg,setLoadProg]=useState({done:0,total:0,current:""});
   const [filter,setFilter]=useState("All");
-  const [sortBy,setSortBy]=useState("topPicks");
-  const [selected,setSelected]=useState(null);
+  const [selectedStock,setSelectedStock]=useState(null);
+  const [selectedScore,setSelectedScore]=useState(null);
   const [customTickers,setCustomTickers]=useState(()=>{try{return JSON.parse(localStorage.getItem("lti_custom")||"[]");}catch{return[];}});
   const [addTicker,setAddTicker]=useState("");
-  const [portfolio,setPortfolio]=useState(()=>{try{return JSON.parse(localStorage.getItem("lti_portfolio")||"[]");}catch{return[];}});
-  const [newPos,setNewPos]=useState({ticker:"",type:"CALL",strike:"",expiry:"",premium:"",contracts:1});
-  const [ideaTicker,setIdeaTicker]=useState("");
-  const [ideaDir,setIdeaDir]=useState("BULLISH");
-  const [ideaReason,setIdeaReason]=useState("");
-  const [ideaTime,setIdeaTime]=useState("3 weeks");
-  const [analysis,setAnalysis]=useState(null);
-  const [analyzing,setAnalyzing]=useState(false);
+  const [trades,setTrades]=useState(loadTrades);
+  const [logModal,setLogModal]=useState(null);
+  const [ahPicks,setAhPicks]=useState(()=>{try{return JSON.parse(localStorage.getItem("lti_ah_picks")||"null");}catch{return null;}});
+  const [ahLoading,setAhLoading]=useState(false);
   const [lastUpdated,setLastUpdated]=useState(null);
-  const [picks,setPicks]=useState(()=>{try{return JSON.parse(localStorage.getItem("lti_picks")||"null");}catch{return null;}});
-  const [picksLoading,setPicksLoading]=useState(false);
-  const [eodPicks,setEodPicks]=useState(()=>{try{return JSON.parse(localStorage.getItem("lti_eod_picks")||"null");}catch{return null;}});
-  const [eodLoading,setEodLoading]=useState(false);
-  const [earnings,setEarnings]=useState([]);
-  const [earningsLoading,setEarningsLoading]=useState(false);
 
   useEffect(()=>{try{localStorage.setItem("lti_custom",JSON.stringify(customTickers));}catch{}},[customTickers]);
-  useEffect(()=>{try{localStorage.setItem("lti_portfolio",JSON.stringify(portfolio));}catch{}},[portfolio]);
-  useEffect(()=>{if(picks)try{localStorage.setItem("lti_picks",JSON.stringify(picks));}catch{}},[picks]);
-  useEffect(()=>{if(eodPicks)try{localStorage.setItem("lti_eod_picks",JSON.stringify(eodPicks));}catch{}},[eodPicks]);
+  useEffect(()=>{saveTrades(trades);},[trades]);
+  useEffect(()=>{if(ahPicks)try{localStorage.setItem("lti_ah_picks",JSON.stringify(ahPicks));}catch{}},[ahPicks]);
 
-  const fetchStocks=useCallback(async()=>{
+  const fetchAndScore=useCallback(async()=>{
     setLoading(true);
-    const data=await loadAllStocks(customTickers,(done,total,current)=>setLoadProg({done,total,current}));
-    setStocks(data);setLastUpdated(new Date());setLoading(false);
-    setEarningsLoading(true);
-    const earningsData=await fetchEarnings([...ALL_TICKERS,...customTickers]);
-    setEarnings(earningsData);setEarningsLoading(false);
+    const data=await loadAllStocks(customTickers,(d,t,c)=>setLoadProg({done:d,total:t,current:c}));
+    setStocks(data);
+    const spy=data.find(s=>s.ticker==="SPY");
+    const qqq=data.find(s=>s.ticker==="QQQ");
+    const spySig=getMarketSignal(spy);
+    const qqqSig=getMarketSignal(qqq);
+    const map={};
+    data.forEach(s=>{map[s.ticker]=scoreStock(s,spySig,qqqSig);});
+    setScoreMap(map);
+    setLastUpdated(new Date());
+    setLoading(false);
   },[customTickers]);
 
-  useEffect(()=>{fetchStocks();},[]);
+  useEffect(()=>{fetchAndScore();},[]);
 
-  const handleGenPicks=async()=>{
-    if(!stocks.length) return;
-    setPicksLoading(true);
-    const result=await genPicks(stocks);
-    if(result) setPicks(result);
-    setPicksLoading(false);
+  const handleAHPicks=async()=>{
+    setAhLoading(true);
+    const result=await getAfterHoursPicks(stocks);
+    setAhPicks(result);
+    setAhLoading(false);
   };
 
-  const handleGenEODPicks=async()=>{
-    if(!stocks.length) return;
-    setEodLoading(true);
-    try{
-      const result=await genEODPicks(stocks);
-      if(result&&result.weekly&&result.monthly){
-        setEodPicks(result);
-      }
-    }catch(e){
-      console.error("EOD picks error:",e);
-    }
-    setEodLoading(false);
-  };
+  const handleStockClick=(stock,score)=>{setSelectedStock(stock);setSelectedScore(score);};
+  const handleLogTrade=(stock,score)=>{setLogModal({stock,score});};
+  const handleSaveTrade=(trade)=>{setTrades(p=>[trade,...p]);};
+  const handleUpdateTrade=(id,updates)=>{setTrades(p=>p.map(t=>t.id===id?{...t,...updates}:t));};
+  const handleDeleteTrade=(id)=>{setTrades(p=>p.filter(t=>t.id!==id));};
 
-  const bullish=stocks.filter(s=>getSignal(s).label==="BULLISH").length;
-  const bearish=stocks.filter(s=>getSignal(s).label==="BEARISH").length;
-  const liveCount=stocks.filter(s=>s.live).length;
-
-  const filtered=stocks
-    .filter(s=>{
-      if(filter==="All") return true;
-      if(filter==="Custom") return customTickers.includes(s.ticker);
-      return WATCHLIST[filter]?.includes(s.ticker);
-    })
-    .sort((a,b)=>{
-      if(sortBy==="topPicks") return getSortScore(b)-getSortScore(a);
-      if(sortBy==="bullish"){
-        const sa=getSignalAndConfidence(a),sb=getSignalAndConfidence(b);
-        if(sa.label==="BULLISH"&&sb.label!=="BULLISH") return -1;
-        if(sb.label==="BULLISH"&&sa.label!=="BULLISH") return 1;
-        return sb.confScore-sa.confScore;
-      }
-      if(sortBy==="bearish"){
-        const sa=getSignalAndConfidence(a),sb=getSignalAndConfidence(b);
-        if(sa.label==="BEARISH"&&sb.label!=="BEARISH") return -1;
-        if(sb.label==="BEARISH"&&sa.label!=="BEARISH") return 1;
-        return sb.confScore-sa.confScore;
-      }
-      if(sortBy==="change") return b.change-a.change;
-      if(sortBy==="rsi") return b.rsi-a.rsi;
-      if(sortBy==="iv") return b.ivRank-a.ivRank;
-      return getSortScore(b)-getSortScore(a);
-    });
-
-  const handleAnalyze=async()=>{
-    if(!ideaTicker||!ideaReason) return;
-    setAnalyzing(true);setAnalysis(null);
-    const sd=stocks.find(s=>s.ticker===ideaTicker.toUpperCase())||mockStock(ideaTicker.toUpperCase());
-    const prompt=`Stock: ${ideaTicker.toUpperCase()} | Live: ${sd.live}
-Thesis: ${ideaDir} over ${ideaTime}
-Reasoning: ${ideaReason}
-Price: $${sd.price?.toFixed(2)} | Change: ${sd.change?.toFixed(2)}% | Momentum: ${sd.momentum?.toFixed(0)}/100
-RSI: ${sd.rsi?.toFixed(0)} | IV Rank: ${sd.ivRank?.toFixed(0)}%
-MA50: ${sd.ma50||"N/A"} | MA200: ${sd.ma200||"N/A"} | Price vs MA50: ${sd.ma50?(sd.price>sd.ma50?"Above":"Below"):"N/A"} | Price vs MA200: ${sd.ma200?(sd.price>sd.ma200?"Above":"Below"):"N/A"}
-MACD Hist: ${sd.macdHist||"N/A"} (${sd.macdHist>0?"Bullish":"Bearish"})
-BB Upper: ${sd.bbUpper||"N/A"} | BB Lower: ${sd.bbLower||"N/A"}
-Support: ${sd.support||"N/A"} | Resistance: ${sd.resistance||"N/A"}
-Sentiment: ${sd.sentiment} | Volume Spike: ${sd.volumeSpike}
-Earnings: ${sd.earningsDays<999?sd.earningsDays+"d":"unknown"}
-Headlines: ${sd.newsHeadlines?.map(n=>n.headline).join(" | ")||"none"}
-Analyze honestly. Disagree if data doesn't support it.`;
-    const result=await analyzeIdea(prompt);
-    setAnalysis(result);setAnalyzing(false);
-  };
-
-  const addPosition=()=>{
-    if(!newPos.ticker||!newPos.strike||!newPos.expiry) return;
-    setPortfolio(p=>[...p,{...newPos,id:Date.now(),ticker:newPos.ticker.toUpperCase()}]);
-    setNewPos({ticker:"",type:"CALL",strike:"",expiry:"",premium:"",contracts:1});
+  const addCustomTicker=()=>{
+    const t=addTicker.toUpperCase().trim();
+    if(t&&!customTickers.includes(t)&&!ALL_TICKERS.includes(t)){setCustomTickers(p=>[...p,t]);setAddTicker("");}
   };
 
   if(loading) return <LoadingScreen progress={loadProg.done} total={loadProg.total} current={loadProg.current}/>;
 
-  const NAVS=[{id:"scanner",icon:"⊞",label:"Scanner"},{id:"picks",icon:"★",label:"Picks"},{id:"earnings",icon:"◷",label:"Earnings"},{id:"validator",icon:"◎",label:"Validate"},{id:"portfolio",icon:"◉",label:"Portfolio"}];
+  // Filter and section stocks
+  const filtered=stocks.filter(s=>{
+    if(!scoreMap[s.ticker]) return false;
+    if(filter==="All") return true;
+    if(filter==="Custom") return customTickers.includes(s.ticker);
+    return WATCHLIST[filter]?.includes(s.ticker);
+  });
+
+  const bySection=(sec)=>filtered.filter(s=>scoreMap[s.ticker]?.section===sec).sort((a,b)=>scoreMap[b.ticker].score-scoreMap[a.ticker].score);
+  const weeklyCall=bySection("weeklyCall");
+  const monthlyCall=bySection("monthlyCall");
+  const weeklyPut=bySection("weeklyPut");
+  const monthlyPut=bySection("monthlyPut");
+  const waitList=bySection("wait");
+  const skipList=bySection("skip");
+
+  const tradeCount=weeklyCall.length+monthlyCall.length+weeklyPut.length+monthlyPut.length;
+  const liveCount=stocks.filter(s=>s.live).length;
+
+  const NAVS=[
+    {id:"scanner",icon:"⊞",label:"Scanner"},
+    {id:"picks",icon:"🌙",label:"AH Picks"},
+    {id:"tracker",icon:"📋",label:"Tracker"},
+  ];
 
   return(
-    <div style={{minHeight:"100vh",background:C.bg,color:C.text,maxWidth:480,margin:"0 auto",fontFamily:"'DM Sans',sans-serif"}}>
-      {selected&&<StockDetail data={selected} onClose={()=>setSelected(null)}/>}
+    <div style={{minHeight:"100vh",background:C.bg,color:C.text,maxWidth:480,margin:"0 auto"}}>
+      {selectedStock&&<StockDetail stock={selectedStock} scoreData={selectedScore} onClose={()=>{setSelectedStock(null);setSelectedScore(null);}} onLogTrade={handleLogTrade}/>}
+      {logModal&&<LogTradeModal stock={logModal.stock} scoreData={logModal.score} onSave={handleSaveTrade} onClose={()=>setLogModal(null)}/>}
 
       {/* Header */}
-      <div style={{padding:"14px 16px 12px",borderBottom:`1px solid ${C.border}`,background:C.bg,position:"sticky",top:0,zIndex:50,backdropFilter:"blur(20px)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+      <div style={{padding:"14px 16px 10px",borderBottom:`1px solid ${C.border}`,background:C.bg,position:"sticky",top:0,zIndex:50,backdropFilter:"blur(20px)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <Logo/>
-          <button onClick={fetchStocks} style={{...ghostBtn,padding:"7px 12px",fontSize:12,display:"flex",alignItems:"center",gap:5}}>
+          <button onClick={fetchAndScore} style={{...ghostBtn,padding:"7px 12px",fontSize:12,display:"flex",alignItems:"center",gap:5}}>
             <span style={{fontSize:14}}>⟳</span> Refresh
           </button>
         </div>
-        <div style={{display:"flex",gap:8}}>
-          {[["▲",bullish,C.green],["▼",bearish,C.red],["◆",stocks.length-bullish-bearish,C.text3],["●",`${liveCount}/${stocks.length}`,C.gold]].map(([emoji,val,color],i)=>(
-            <div key={i} style={{flex:1,background:C.bg2,borderRadius:10,padding:"8px 6px",textAlign:"center",border:`1px solid ${C.border}`}}>
-              <div style={{fontSize:10,color,fontFamily:"'DM Mono',monospace",marginBottom:2}}>{emoji}</div>
-              <div style={{fontSize:13,fontWeight:600,color,fontFamily:"'DM Mono',monospace"}}>{val}</div>
+        {/* Market mood */}
+        <div style={{display:"flex",gap:6,marginBottom:5}}>
+          {[
+            ["TRADE",tradeCount,C.green],
+            ["WAIT",waitList.length,C.amber],
+            ["SKIP",skipList.length,C.red],
+            ["LIVE",`${liveCount}/${stocks.length}`,C.gold]
+          ].map(([l,v,c])=>(
+            <div key={l} style={{flex:1,background:C.bg2,borderRadius:10,padding:"7px 4px",textAlign:"center",border:`1px solid ${C.border}`}}>
+              <div style={{fontSize:9,color:c,fontFamily:"'DM Mono',monospace",marginBottom:2}}>{l}</div>
+              <div style={{fontSize:13,fontWeight:600,color:c,fontFamily:"'DM Mono',monospace"}}>{v}</div>
             </div>
           ))}
         </div>
-        {lastUpdated&&<div style={{fontSize:10,color:C.text3,fontFamily:"'DM Mono',monospace",marginTop:6}}><LiveDot live={true}/>{lastUpdated.toLocaleTimeString()} · {liveCount} live feeds active</div>}
+        {lastUpdated&&<div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace"}}><span style={{width:6,height:6,borderRadius:"50%",background:liveCount>0?C.green:C.text3,display:"inline-block",marginRight:4,verticalAlign:"middle"}}/>{lastUpdated.toLocaleTimeString()} · {liveCount} live feeds</div>}
       </div>
 
       {/* Nav */}
-      <div style={{display:"flex",borderBottom:`1px solid ${C.border}`,background:C.bg,position:"sticky",top:116,zIndex:49,overflowX:"auto"}}>
+      <div style={{display:"flex",borderBottom:`1px solid ${C.border}`,background:C.bg,position:"sticky",top:108,zIndex:49}}>
         {NAVS.map(n=>(
-          <button key={n.id} onClick={()=>setTab(n.id)} style={{flexShrink:0,flex:1,padding:"12px 8px",border:"none",cursor:"pointer",background:"transparent",borderBottom:tab===n.id?`2px solid ${C.gold}`:"2px solid transparent",color:tab===n.id?C.goldLt:C.text2,fontSize:12,fontFamily:"'DM Sans',sans-serif",fontWeight:tab===n.id?600:400,transition:"all 0.15s",letterSpacing:0.3}}>
-            <div style={{fontSize:14,marginBottom:2}}>{n.icon}</div>
-            {n.label}
+          <button key={n.id} onClick={()=>setTab(n.id)} style={{flex:1,padding:"11px 8px",border:"none",cursor:"pointer",background:"transparent",borderBottom:tab===n.id?`2px solid ${C.gold}`:"2px solid transparent",color:tab===n.id?C.goldLt:C.text2,fontSize:12,fontWeight:tab===n.id?600:400,transition:"all 0.15s"}}>
+            <div style={{fontSize:14,marginBottom:2}}>{n.icon}</div>{n.label}
           </button>
         ))}
       </div>
 
-      <div style={{padding:16}}>
-
-        {/* ── SCANNER ── */}
-        {tab==="scanner"&&(<>
-          <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4,marginBottom:12}}>
-            {["All","AI & Tech","AI Software","Quantum","Photonics","LEO & Space","Robotics","Nuclear","Energy","EV & Battery","Commodities","Macro & ETFs","Minerals & Mining","Custom"].map(f=>(
+      {/* ── SCANNER ── */}
+      {tab==="scanner"&&(
+        <div style={{padding:16}}>
+          {/* Filters */}
+          <div style={{display:"flex",gap:5,overflowX:"auto",paddingBottom:6,marginBottom:14}}>
+            {["All","AI & Chips","AI Software","Quantum","Space & LEO","Nuclear","Energy","EV & Battery","Commodities","Macro ETFs","Crypto","Custom"].map(f=>(
               <button key={f} style={fBtn(filter===f)} onClick={()=>setFilter(f)}>{f}</button>
             ))}
           </div>
-          <div style={{display:"flex",gap:6,marginBottom:14,alignItems:"center",overflowX:"auto"}}>
-            <span style={{fontSize:11,color:C.text3,flexShrink:0,fontFamily:"'DM Mono',monospace"}}>Sort:</span>
-            {[["topPicks","⭐ Top Picks"],["bullish","▲ Bullish"],["bearish","▼ Bearish"],["change","% Chg"],["rsi","RSI"],["iv","IV"]].map(([k,l])=>(
-              <button key={k} style={fBtn(sortBy===k)} onClick={()=>setSortBy(k)}>{l}</button>
-            ))}
-          </div>
 
-          {/* Bullish */}
-          <div style={{...card}}>
-            <div style={{...cardHdr,color:C.green}}><span>▲</span> Top Bullish Setups</div>
-            {filtered.filter(s=>getSignal(s).label==="BULLISH").slice(0,5).map(s=><StockRow key={s.ticker} data={s} onClick={setSelected}/>)}
-            {!filtered.some(s=>getSignal(s).label==="BULLISH")&&<div style={{padding:16,color:C.text3,fontSize:13}}>No bullish setups in this filter</div>}
-          </div>
+          {/* Market Mood Banner */}
+          {stocks.find(s=>s.ticker==="SPY")&&(()=>{
+            const spy=stocks.find(s=>s.ticker==="SPY");
+            const qqq=stocks.find(s=>s.ticker==="QQQ");
+            const spySig=getMarketSignal(spy);
+            const qqqSig=getMarketSignal(qqq);
+            const mood=spySig==="bull"&&qqqSig==="bull"?"BULLISH":spySig==="bear"&&qqqSig==="bear"?"BEARISH":"MIXED";
+            const mc=mood==="BULLISH"?C.green:mood==="BEARISH"?C.red:C.amber;
+            return(
+              <div style={{background:`${mc}10`,border:`1px solid ${mc}25`,borderRadius:12,padding:"10px 14px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <div style={{fontSize:10,color:mc,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:2}}>MARKET MOOD</div>
+                  <div style={{fontSize:13,fontWeight:600,color:mc}}>{mood==="BULLISH"?"▲ Markets are bullish — favor call spreads":mood==="BEARISH"?"▼ Markets are bearish — favor put spreads":"◆ Mixed signals — be selective, higher bar to trade"}</div>
+                </div>
+                <div style={{textAlign:"right",flexShrink:0}}>
+                  <div style={{fontSize:10,color:C.text3,fontFamily:"'DM Mono',monospace"}}>SPY {spy.change>=0?"+":""}{spy.change?.toFixed(1)}%</div>
+                  <div style={{fontSize:10,color:C.text3,fontFamily:"'DM Mono',monospace"}}>QQQ {qqq?.change>=0?"+":""}{qqq?.change?.toFixed(1)}%</div>
+                </div>
+              </div>
+            );
+          })()}
 
-          {/* Bearish */}
+          {/* Sections */}
+          <SectionCard title="BEST WEEKLY CALL DEBIT SPREADS" color={C.green} emoji="📈" stocks={weeklyCall} scoreMap={scoreMap} onClick={handleStockClick}/>
+          <SectionCard title="BEST MONTHLY CALL DEBIT SPREADS" color={C.green} emoji="📅" stocks={monthlyCall} scoreMap={scoreMap} onClick={handleStockClick}/>
+          <SectionCard title="BEST WEEKLY PUT DEBIT SPREADS" color={C.red} emoji="📉" stocks={weeklyPut} scoreMap={scoreMap} onClick={handleStockClick}/>
+          <SectionCard title="BEST MONTHLY PUT DEBIT SPREADS" color={C.red} emoji="🗓" stocks={monthlyPut} scoreMap={scoreMap} onClick={handleStockClick}/>
+          <SectionCard title="WAIT — GOOD SETUP, NOT YET" color={C.amber} emoji="⏳" stocks={waitList} scoreMap={scoreMap} onClick={handleStockClick} defaultCollapsed={true}/>
+          <SectionCard title="AVOID / BAD SETUP" color={C.text3} emoji="✗" stocks={skipList} scoreMap={scoreMap} onClick={handleStockClick} defaultCollapsed={true}/>
+
+          {tradeCount===0&&waitList.length===0&&(
+            <div style={{textAlign:"center",padding:40,color:C.text3}}>
+              <div style={{fontSize:32,marginBottom:12}}>⊞</div>
+              <div style={{fontSize:14,color:C.text2,marginBottom:6}}>No strong setups right now</div>
+              <div style={{fontSize:12,lineHeight:1.7}}>Market data may be limited. Try refreshing during market hours (9:30am–4pm ET) for live analysis.</div>
+            </div>
+          )}
+
+          {/* Add Ticker */}
           <div style={card}>
-            <div style={{...cardHdr,color:C.red}}><span>▼</span> Top Bearish Setups</div>
-            {filtered.filter(s=>getSignal(s).label==="BEARISH").slice(0,5).map(s=><StockRow key={s.ticker} data={s} onClick={setSelected}/>)}
-            {!filtered.some(s=>getSignal(s).label==="BEARISH")&&<div style={{padding:16,color:C.text3,fontSize:13}}>No bearish setups in this filter</div>}
-          </div>
-
-          {/* Full list */}
-          <div style={card}>
-            <div style={cardHdr}><span>⊞</span> Full Watchlist <span style={{marginLeft:"auto",color:C.text3,fontSize:10,fontFamily:"'DM Mono',monospace"}}>{filtered.length} stocks</span></div>
-            {filtered.map(s=><StockRow key={s.ticker} data={s} onClick={setSelected}/>)}
-          </div>
-
-          {/* Add ticker */}
-          <div style={card}>
-            <div style={cardHdr}>+ Add Ticker</div>
-            <div style={{padding:14,display:"flex",gap:8}}>
-              <input style={{...inp,flex:1}} placeholder="e.g. COIN" value={addTicker} onChange={e=>setAddTicker(e.target.value.toUpperCase())} onKeyDown={e=>e.key==="Enter"&&(()=>{const t=addTicker.trim();if(t&&!customTickers.includes(t)&&!ALL_TICKERS.includes(t)){setCustomTickers(p=>[...p,t]);setAddTicker("");}})()}/>
-              <button style={{...ghostBtn}} onClick={()=>{const t=addTicker.trim();if(t&&!customTickers.includes(t)&&!ALL_TICKERS.includes(t)){setCustomTickers(p=>[...p,t]);setAddTicker("");}}}>Add</button>
+            <div style={{padding:"10px 16px",borderBottom:`1px solid ${C.border}`,fontSize:11,color:C.text2,letterSpacing:2,fontFamily:"'DM Mono',monospace"}}>+ ADD TICKER</div>
+            <div style={{padding:12,display:"flex",gap:8}}>
+              <input style={{...inp,flex:1}} placeholder="e.g. COIN" value={addTicker} onChange={e=>setAddTicker(e.target.value.toUpperCase())} onKeyDown={e=>e.key==="Enter"&&addCustomTicker()}/>
+              <button style={ghostBtn} onClick={addCustomTicker}>Add</button>
             </div>
             {customTickers.length>0&&(
-              <div style={{padding:"0 14px 14px",display:"flex",flexWrap:"wrap",gap:6}}>
+              <div style={{padding:"0 12px 12px",display:"flex",flexWrap:"wrap",gap:6}}>
                 {customTickers.map(t=>(
-                  <span key={t} style={{background:"rgba(201,168,76,0.1)",border:`1px solid ${C.gold}30`,borderRadius:8,padding:"4px 10px",fontSize:12,color:C.goldLt,display:"flex",alignItems:"center",gap:6}}>
-                    {t}
-                    <span onClick={()=>setCustomTickers(p=>p.filter(x=>x!==t))} style={{cursor:"pointer",color:C.red,fontSize:14,lineHeight:1}}>×</span>
+                  <span key={t} style={{background:"rgba(201,168,76,0.1)",border:`1px solid ${C.gold}30`,borderRadius:8,padding:"3px 10px",fontSize:12,color:C.goldLt,display:"flex",alignItems:"center",gap:6}}>
+                    {t}<span onClick={()=>setCustomTickers(p=>p.filter(x=>x!==t))} style={{cursor:"pointer",color:C.red,fontSize:14}}>×</span>
                   </span>
                 ))}
               </div>
             )}
           </div>
-        </>)}
+        </div>
+      )}
 
-        {/* ── PICKS ── */}
-        {tab==="picks"&&(<>
-          <div style={{background:"rgba(201,168,76,0.06)",border:`1px solid ${C.gold}20`,borderRadius:12,padding:14,marginBottom:14,fontSize:13,color:C.text2,lineHeight:1.7}}>
-            🏆 AI picks using live price, RSI, MA trend, MACD, Bollinger Bands, support/resistance, IV rank, and sentiment. Regenerate every Sunday for weekly picks and monthly for the monthly pick.
+      {/* ── AFTER HOURS PICKS ── */}
+      {tab==="picks"&&(
+        <div style={{padding:16}}>
+          <div style={{background:"rgba(59,130,246,0.06)",border:`1px solid rgba(59,130,246,0.2)`,borderRadius:12,padding:14,marginBottom:14,fontSize:13,color:C.text2,lineHeight:1.7}}>
+            🌙 After Hours swing options analysis. Uses chart patterns, scoring, and news sentiment to find the best debit spread setups for the coming week — works anytime, even when the market is closed.
           </div>
-
-          {/* Live Picks */}
-          <div style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:14,padding:14,marginBottom:14}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-              <span style={{fontSize:16}}>📈</span>
-              <div>
-                <div style={{fontSize:13,fontWeight:600,color:C.text}}>Live Market Picks</div>
-                <div style={{fontSize:11,color:C.text3}}>Best used during market hours (9:30am–4pm ET) when live prices are active</div>
-              </div>
-            </div>
-            <button onClick={handleGenPicks} disabled={picksLoading||eodLoading} style={{...goldBtn,marginTop:8,marginBottom:0}}>
-              {picksLoading?"Analyzing live data…":"⟳ Generate Live Picks"}
-            </button>
-          </div>
-          {picksLoading&&<div style={{textAlign:"center",padding:32,color:C.gold,fontFamily:"'DM Mono',monospace",fontSize:12,letterSpacing:1}}>
-            <div style={{fontSize:24,marginBottom:10,display:"inline-block",animation:"spin 1s linear infinite"}}>◌</div>
-            <div>Analyzing live market data…</div>
-          </div>}
-          {picks&&!picksLoading&&<>
-            <PickCard pick={picks.weekly} timeframe="PICK OF THE WEEK — LIVE" stocks={stocks}/>
-            <PickCard pick={picks.monthly} timeframe="PICK OF THE MONTH — LIVE" stocks={stocks}/>
-          </>}
-
-          {/* Divider */}
-          <div style={{display:"flex",alignItems:"center",gap:10,margin:"8px 0 14px"}}>
-            <div style={{flex:1,height:1,background:C.border}}/>
-            <span style={{fontSize:11,color:C.text3,fontFamily:"'DM Mono',monospace",whiteSpace:"nowrap"}}>OR</span>
-            <div style={{flex:1,height:1,background:C.border}}/>
-          </div>
-
-          {/* EOD Picks */}
-          <div style={{background:"rgba(59,130,246,0.06)",border:`1px solid rgba(59,130,246,0.2)`,borderRadius:14,padding:14,marginBottom:14}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-              <span style={{fontSize:16}}>🌙</span>
-              <div>
-                <div style={{fontSize:13,fontWeight:600,color:C.text}}>After Hours Analysis</div>
-                <div style={{fontSize:11,color:C.text3}}>Fetches real chart history + news sentiment — works anytime, even when market is closed</div>
-              </div>
-            </div>
-            <button onClick={handleGenEODPicks} disabled={eodLoading||picksLoading} style={{...goldBtn,marginTop:8,marginBottom:0,background:"linear-gradient(135deg,#3b82f6,#60a5fa,#3b82f6)",boxShadow:"0 4px 20px rgba(59,130,246,0.3)"}}>
-              {eodLoading?"Fetching charts & news…":"🌙 After Hours Analysis"}
-            </button>
-          </div>
-          {eodLoading&&<div style={{textAlign:"center",padding:32,color:"#60a5fa",fontFamily:"'DM Mono',monospace",fontSize:12,letterSpacing:1}}>
-            <div style={{fontSize:24,marginBottom:10,display:"inline-block",animation:"spin 1s linear infinite"}}>◌</div>
-            <div style={{marginBottom:6}}>Scanning 30 stocks across all sectors…</div>
-            <div style={{fontSize:10,color:C.text3}}>AI chips · Quantum · Nuclear · Space · Commodities · Macro</div>
-            <div style={{fontSize:10,color:C.text3,marginTop:4}}>This takes 30–60 seconds. Fetching real chart data for each.</div>
-          </div>}
-          {eodPicks&&!eodLoading&&<>
-            <EodPickCard pick={eodPicks.weekly} timeframe="AFTER HOURS PICK — WEEKLY"/>
-            <EodPickCard pick={eodPicks.monthly} timeframe="AFTER HOURS PICK — MONTHLY"/>
-          </>}
-
-          {!picks&&!picksLoading&&!eodPicks&&!eodLoading&&<div style={{textAlign:"center",padding:36,color:C.text3}}>
-            <div style={{fontSize:36,marginBottom:12}}>🏆</div>
-            <div style={{fontSize:15,marginBottom:6,color:C.text2}}>No picks yet</div>
-            <div style={{fontSize:13,lineHeight:1.7}}>During market hours use <strong style={{color:C.gold}}>Live Picks</strong>.<br/>After hours use <strong style={{color:C.blue}}>After Hours Analysis</strong>.</div>
-          </div>}
-        </>)}
-
-        {/* ── EARNINGS ── */}
-        {tab==="earnings"&&(<>
-          <div style={{background:"rgba(245,158,11,0.06)",border:`1px solid ${C.amber}20`,borderRadius:12,padding:14,marginBottom:14,fontSize:13,color:C.text2,lineHeight:1.7}}>
-            📅 Upcoming earnings for your watchlist. Options premiums spike before earnings — plan ahead.
-          </div>
-          {earningsLoading?<div style={{textAlign:"center",padding:40,color:C.gold,fontFamily:"'DM Mono',monospace",fontSize:12}}>
-            <div style={{fontSize:22,display:"inline-block",animation:"spin 1s linear infinite",marginBottom:10}}>◌</div>
-            <div>Loading earnings calendar…</div>
-          </div>:<div style={card}><EarningsCalendar earnings={earnings} stocks={stocks}/></div>}
-          <div style={{background:C.bg2,borderRadius:12,padding:14,border:`1px solid ${C.border}`,marginTop:4}}>
-            <div style={{fontSize:11,color:C.gold,fontFamily:"'DM Mono',monospace",marginBottom:8,letterSpacing:1}}>LEGEND</div>
-            <div style={{fontSize:12,color:C.text2,lineHeight:2}}>
-              ☀ Pre-Market (BMO) &nbsp;·&nbsp; 🌙 After-Hours (AMC)<br/>
-              🔴 1–3 days = Act now or stay out<br/>
-              🟡 4–7 days = Plan your play<br/>
-              🟢 8–21 days = Plenty of time
-            </div>
-          </div>
-        </>)}
-
-        {/* ── VALIDATOR ── */}
-        {tab==="validator"&&(<>
-          <div style={{background:"rgba(201,168,76,0.06)",border:`1px solid ${C.gold}20`,borderRadius:12,padding:14,marginBottom:14,fontSize:13,color:C.text2,lineHeight:1.7}}>
-            📌 Enter your trade idea. I'll analyze it with live price, RSI, MA trend, MACD, Bollinger Bands, support/resistance, sentiment, and news — and tell you honestly if the data supports it.
-          </div>
-          <div style={card}>
-            <div style={cardHdr}>◎ Validate Your Trade Idea</div>
-            <div style={{padding:16,display:"flex",flexDirection:"column",gap:14}}>
-              <div><label style={lbl}>TICKER</label><input style={inp} placeholder="e.g. NVDA" value={ideaTicker} onChange={e=>setIdeaTicker(e.target.value.toUpperCase())}/></div>
-              <div>
-                <label style={lbl}>DIRECTION</label>
-                <div style={{display:"flex",gap:8}}>
-                  {["BULLISH","BEARISH"].map(d=>(
-                    <button key={d} onClick={()=>setIdeaDir(d)} style={{flex:1,padding:"12px",borderRadius:10,border:`1px solid`,borderColor:ideaDir===d?(d==="BULLISH"?C.green:C.red):C.border,background:ideaDir===d?(d==="BULLISH"?"rgba(0,200,150,0.1)":"rgba(240,70,90,0.1)"):"transparent",color:ideaDir===d?(d==="BULLISH"?C.green:C.red):C.text2,fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:600,cursor:"pointer",transition:"all 0.15s"}}>
-                      {d==="BULLISH"?"▲ Bullish":"▼ Bearish"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label style={lbl}>TIMEFRAME</label>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                  {["1 week","2 weeks","3 weeks","1 month","2 months"].map(t=>(
-                    <button key={t} style={fBtn(ideaTime===t)} onClick={()=>setIdeaTime(t)}>{t}</button>
-                  ))}
-                </div>
-              </div>
-              <div><label style={lbl}>YOUR REASONING</label><textarea style={{...inp,minHeight:90,lineHeight:1.6}} placeholder="Why do you think this stock is going up or down? Be specific…" value={ideaReason} onChange={e=>setIdeaReason(e.target.value)}/></div>
-              <button style={goldBtn} onClick={handleAnalyze} disabled={analyzing}>{analyzing?"Analyzing…":"◎ Analyze My Idea"}</button>
-            </div>
-          </div>
-          {analyzing&&<div style={{textAlign:"center",padding:32,color:C.gold,fontFamily:"'DM Mono',monospace",fontSize:12,letterSpacing:1}}>
-            <div style={{fontSize:24,display:"inline-block",animation:"spin 1s linear infinite",marginBottom:10}}>◌</div>
-            <div>Running full technical analysis…</div>
-          </div>}
-          {analysis&&(
-            <div style={{...card,border:`1px solid ${analysis.agree?C.green:C.red}30`,animation:"fadeUp 0.3s ease"}}>
-              <div style={{...cardHdr,color:analysis.agree?C.green:C.red}}>{analysis.agree?"✓ Analysis Agrees":"✗ Analysis Disagrees"}</div>
-              <div style={{padding:16,display:"flex",flexDirection:"column",gap:12}}>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                  {[["VERDICT",analysis.verdict,analysis.verdict==="BULLISH"?C.green:analysis.verdict==="BEARISH"?C.red:C.text2],["CONFIDENCE",`${analysis.confidence}/10`,analysis.confidence>=7?C.green:analysis.confidence>=5?C.amber:C.red]].map(([l,v,c])=>(
-                    <div key={l} style={{background:C.bg3,borderRadius:10,padding:12,textAlign:"center"}}>
-                      <div style={{fontSize:10,color:C.text3,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:4}}>{l}</div>
-                      <div style={{fontSize:16,fontWeight:600,color:c,fontFamily:"'DM Serif Display',serif"}}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{fontSize:13,color:C.text2,lineHeight:1.7}}>{analysis.reasoning}</div>
-                <div style={{background:C.bg3,border:`1px solid ${C.gold}20`,borderRadius:10,padding:12}}>
-                  <div style={{fontSize:10,color:C.gold,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:5}}>SUGGESTED PLAY</div>
-                  <div style={{fontSize:13,color:C.text,fontWeight:500}}>{analysis.suggestedPlay}</div>
-                </div>
-                <div style={{background:"rgba(240,70,90,0.06)",border:`1px solid ${C.red}20`,borderRadius:10,padding:12}}>
-                  <div style={{fontSize:10,color:C.red,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:5}}>⚠ KEY RISK</div>
-                  <div style={{fontSize:12,color:C.text2,lineHeight:1.5}}>{analysis.keyRisk}</div>
-                </div>
-              </div>
+          <button onClick={handleAHPicks} disabled={ahLoading} style={{...goldBtn,marginTop:0,marginBottom:14,background:"linear-gradient(135deg,#3b82f6,#60a5fa,#3b82f6)",boxShadow:"0 4px 20px rgba(59,130,246,0.25)"}}>
+            {ahLoading?"Analyzing setups…":"🌙 Generate After Hours Picks"}
+          </button>
+          {ahLoading&&(
+            <div style={{textAlign:"center",padding:28,color:"#60a5fa",fontFamily:"'DM Mono',monospace",fontSize:11,letterSpacing:1}}>
+              <div style={{fontSize:22,display:"inline-block",animation:"spin 1s linear infinite",marginBottom:8}}>◌</div>
+              <div>Scoring all setups and finding best spreads…</div>
             </div>
           )}
-        </>)}
-
-        {/* ── PORTFOLIO ── */}
-        {tab==="portfolio"&&(<>
-          <div style={card}>
-            <div style={cardHdr}>+ Log New Position</div>
-            <div style={{padding:16,display:"flex",flexDirection:"column",gap:12}}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <div><label style={lbl}>TICKER</label><input style={inp} placeholder="NVDA" value={newPos.ticker} onChange={e=>setNewPos(p=>({...p,ticker:e.target.value.toUpperCase()}))}/></div>
-                <div>
-                  <label style={lbl}>TYPE</label>
-                  <div style={{display:"flex",gap:6}}>
-                    {["CALL","PUT"].map(t=>(
-                      <button key={t} onClick={()=>setNewPos(p=>({...p,type:t}))} style={{flex:1,padding:"11px 4px",borderRadius:10,border:`1px solid`,borderColor:newPos.type===t?(t==="CALL"?C.green:C.red):C.border,background:newPos.type===t?(t==="CALL"?"rgba(0,200,150,0.1)":"rgba(240,70,90,0.1)"):"transparent",color:newPos.type===t?(t==="CALL"?C.green:C.red):C.text2,fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:600,cursor:"pointer"}}>{t}</button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <div><label style={lbl}>STRIKE</label><input style={inp} placeholder="$210" value={newPos.strike} onChange={e=>setNewPos(p=>({...p,strike:e.target.value}))}/></div>
-                <div><label style={lbl}>EXPIRY</label><input style={inp} placeholder="05/16/25" value={newPos.expiry} onChange={e=>setNewPos(p=>({...p,expiry:e.target.value}))}/></div>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <div><label style={lbl}>PREMIUM PAID</label><input style={inp} placeholder="$3.20" value={newPos.premium} onChange={e=>setNewPos(p=>({...p,premium:e.target.value}))}/></div>
-                <div><label style={lbl}>CONTRACTS</label><input style={inp} type="number" min="1" value={newPos.contracts} onChange={e=>setNewPos(p=>({...p,contracts:e.target.value}))}/></div>
-              </div>
-              <button style={goldBtn} onClick={addPosition}>+ Add Position</button>
-            </div>
-          </div>
-          {portfolio.length===0?(
-            <div style={{textAlign:"center",padding:48,color:C.text3}}>
-              <div style={{fontSize:36,marginBottom:12}}>◉</div>
-              <div style={{fontSize:15,color:C.text2,marginBottom:6}}>No Open Positions</div>
-              <div style={{fontSize:13}}>Log your first trade above</div>
-            </div>
-          ):(
-            <div style={card}>
-              <div style={cardHdr}>◉ Open Positions <span style={{marginLeft:"auto",color:C.text3,fontSize:10,fontFamily:"'DM Mono',monospace"}}>{portfolio.length} active</span></div>
-              {portfolio.map(pos=>{
-                const sd=stocks.find(s=>s.ticker===pos.ticker)||mockStock(pos.ticker);
-                const sig=getSignal(sd);
-                const aligned=(pos.type==="CALL"&&sig.label==="BULLISH")||(pos.type==="PUT"&&sig.label==="BEARISH");
-                const expDate=pos.expiry?new Date(pos.expiry+"T00:00:00"):null;
-                const daysLeft=expDate?Math.round((expDate-new Date())/86400000):null;
-                return(
-                  <div key={pos.id} style={{padding:"14px 16px",borderBottom:`1px solid ${C.border}`}}>
-                    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}>
-                      <TickerLogo ticker={pos.ticker} size={38}/>
-                      <div style={{flex:1}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                            <span style={{fontSize:16,fontWeight:600,color:C.text}}>{pos.ticker}</span>
-                            <span style={{fontSize:11,color:C.text3,display:"block",marginTop:1}}>{getCompanyName(pos.ticker)}</span>
-                            <Chip label={pos.type} color={pos.type==="CALL"?C.green:C.red} size={11}/>
-                            <LiveDot live={sd.live}/>
-                          </div>
-                          <button onClick={()=>setPortfolio(p=>p.filter(x=>x.id!==pos.id))} style={{background:"none",border:"none",color:C.text3,cursor:"pointer",fontSize:18,lineHeight:1}}>×</button>
-                        </div>
-                        {daysLeft!==null&&<div style={{fontSize:11,color:daysLeft<7?C.red:daysLeft<14?C.amber:C.text3,fontFamily:"'DM Mono',monospace"}}>{daysLeft>0?`${daysLeft} days to expiry`:"Expired"}</div>}
-                      </div>
-                    </div>
-                    <div style={{display:"flex",gap:12,fontSize:12,color:C.text2,flexWrap:"wrap",marginBottom:10}}>
-                      {[["Strike",pos.strike],["Expiry",pos.expiry],["Premium",pos.premium],["Contracts",pos.contracts]].map(([l,v])=>(
-                        <span key={l}>{l}: <span style={{color:C.text,fontWeight:500}}>{v}</span></span>
-                      ))}
-                    </div>
-                    {sd.live&&<div style={{fontSize:12,color:C.text2,marginBottom:8}}>
-                      Live: <span style={{color:C.text,fontWeight:500}}>${sd.price?.toFixed(2)}</span>{" "}
-                      <span style={{color:sd.change>=0?C.green:C.red}}>{sd.change>=0?"+":""}{sd.change?.toFixed(2)}%</span>
-                      {" · "}<Chip label={`${getSentEmoji(sd.sentiment)} ${sd.sentiment}`} color={getSentColor(sd.sentiment)} size={10}/>
-                    </div>}
-                    {(sd.ma50||sd.ma200)&&<div style={{display:"flex",gap:5,marginBottom:8}}>
-                      <MATag price={sd.price} ma={sd.ma50} label="MA50"/>
-                      <MATag price={sd.price} ma={sd.ma200} label="MA200"/>
-                    </div>}
-                    <div style={{padding:"8px 12px",borderRadius:8,background:aligned?"rgba(0,200,150,0.08)":"rgba(245,158,11,0.08)",border:`1px solid ${aligned?C.green:C.amber}25`,fontSize:12,color:aligned?C.green:C.amber}}>
-                      {aligned?"✓ Signal aligned with your position":"⚠ Current signal doesn't favor this position — monitor closely"}
-                    </div>
-                  </div>
-                );
-              })}
+          {ahPicks&&!ahLoading&&(
+            <>
+              <AHPickCard pick={ahPicks.weekly} label="AFTER HOURS — WEEKLY SPREAD (7–14 DTE)"/>
+              <AHPickCard pick={ahPicks.monthly} label="AFTER HOURS — MONTHLY SPREAD (21–45 DTE)"/>
+            </>
+          )}
+          {!ahPicks&&!ahLoading&&(
+            <div style={{textAlign:"center",padding:40,color:C.text3}}>
+              <div style={{fontSize:36,marginBottom:12}}>🌙</div>
+              <div style={{fontSize:14,color:C.text2,marginBottom:6}}>No picks yet</div>
+              <div style={{fontSize:12,lineHeight:1.7}}>Tap the button above to analyze all setups and get the best debit spread trades for the week.</div>
             </div>
           )}
-        </>)}
-      </div>
+        </div>
+      )}
 
-      <div style={{padding:"20px 16px",borderTop:`1px solid ${C.border}`,textAlign:"center"}}>
-        <div style={{fontSize:10,color:C.text3,fontFamily:"'DM Mono',monospace",lineHeight:2,letterSpacing:0.5}}>
-          Lucas Trade Intel · For informational purposes only<br/>
-          Not financial advice · Options trading involves substantial risk<br/>
-          © Lucas Heating LLC
+      {/* ── TRACKER ── */}
+      {tab==="tracker"&&(
+        <TradeTrackerTab trades={trades} onUpdateTrade={handleUpdateTrade} onDeleteTrade={handleDeleteTrade}/>
+      )}
+
+      <div style={{padding:"16px",borderTop:`1px solid ${C.border}`,textAlign:"center"}}>
+        <div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace",lineHeight:2,letterSpacing:0.5}}>
+          Lucas Trade Intel · Swing Options Assistant<br/>
+          For informational purposes only · Not financial advice<br/>
+          Options trading involves substantial risk · © Lucas Heating LLC
         </div>
       </div>
     </div>
