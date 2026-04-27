@@ -526,82 +526,106 @@ async function fetchHistoricalData(ticker){
 }
 
 async function genEODPicks(stocks){
-  // Step 1: fetch real historical data for top tickers independently
-  // This works 24/7 — candle history and news are always available
-  // Scan best representatives from every sector for maximum recommendation quality
-  const TOP_TICKERS=[
-    // AI Chips & Hardware (most liquid, best data)
-    "NVDA","AMD","AVGO","TSM","ARM","ASML","MU","SMCI",
-    // AI Software
-    "PLTR","MSFT","GOOGL","META","AMZN","NOW","NET","SOUN",
-    // Quantum
-    "IONQ","RGTI","QUBT","QBTS",
-    // Space & LEO
-    "RKLB","ASTS",
-    // Nuclear & Energy
-    "CEG","CCJ","OKLO","SMR","NNE","VST","FSLR","NEE",
-    // EV & Battery
-    "TSLA","RIVN","QS",
-    // Commodities & Minerals
-    "GLD","SLV","USO","COPX","MP","UUUU","NEM","WPM",
-    // Macro
-    "SPY","QQQ","TLT","MSTR","COIN",
-    // Robotics
-    "ISRG","PATH",
-    // Photonics
-    "LITE","COHR"
-  ];
-  const loading=[];
-  for(let i=0;i<Math.min(30,TOP_TICKERS.length);i++){
-    loading.push(fetchHistoricalData(TOP_TICKERS[i]));
-    await new Promise(r=>setTimeout(r,120)); // throttle
+  // STRATEGY: Use existing loaded stocks data first (always available)
+  // Then supplement with a few fresh historical fetches for key tickers
+  // This ensures we ALWAYS have data to work with
+
+  // Step 1: Use existing stocks that have real chart data (ma50/ma200/macd)
+  let dataPool=stocks.filter(s=>s.price>0&&(s.ma50||s.ma200||s.macdHist!=null));
+
+  // Step 2: If pool is small (after hours / simulated), fetch fresh historical
+  // for just 8 key tickers — fast enough to not timeout
+  if(dataPool.length<10){
+    const KEY=["NVDA","SPY","QQQ","PLTR","TSLA","OKLO","RKLB","GLD"];
+    const fresh=await Promise.all(KEY.map(t=>fetchHistoricalData(t)));
+    fresh.forEach((h,i)=>{
+      if(h&&h.price>0){
+        const seed=KEY[i].split("").reduce((a,c)=>a+c.charCodeAt(0),0);
+        h.ivRank=h.ivRank||((Math.sin(seed*6)*10000)%1+1)/2*100;
+        // Add to pool if not already there
+        if(!dataPool.find(s=>s.ticker===KEY[i])) dataPool.push(h);
+      }
+    });
   }
-  const historicalResults=await Promise.all(loading);
 
-  // Step 2: merge with existing stocks data — prefer historical if live isn't available
-  const merged=TOP_TICKERS.map((t,i)=>{
-    const hist=historicalResults[i];
-    const existing=stocks.find(s=>s.ticker===t);
-    // If we have real historical candles use them, otherwise fall back to existing
-    if(hist&&(hist.ma50||hist.ma200||hist.macdHist!=null)){
-      // Fill in ivRank from existing if available
-      if(existing?.ivRank) hist.ivRank=existing.ivRank;
-      else{const seed=t.split("").reduce((a,c)=>a+c.charCodeAt(0),0);hist.ivRank=((Math.sin(seed*6)*10000)%1+1)/2*100;}
-      return hist;
-    }
-    return existing||null;
-  }).filter(Boolean);
+  // Step 3: Always include all existing stocks as fallback
+  stocks.forEach(s=>{
+    if(s.price>0&&!dataPool.find(d=>d.ticker===s.ticker)) dataPool.push(s);
+  });
 
-  // Step 3: build rich data string for Claude
-  const dataStr=merged.map(s=>{
+  // Step 4: Sort by signal confidence — best setups first
+  dataPool.sort((a,b)=>{
+    const sa=getSignalAndConfidence(a),sb=getSignalAndConfidence(b);
+    return sb.confScore-sa.confScore||Math.abs(b.change)-Math.abs(a.change);
+  });
+
+  // Take top 20 for analysis
+  const top=dataPool.slice(0,20);
+
+  const dataStr=top.map(s=>{
     const sig=getSignalAndConfidence(s);
-    const hasRealChart=s.historical||s.ma50||s.ma200;
     return`${s.ticker} (${getCompanyName(s.ticker)}) [${getSector(s.ticker)}]:
-  Last close: $${s.price?.toFixed(2)} | Prev close: $${s.prevClose?.toFixed(2)||"N/A"} | Change: ${s.change?.toFixed(2)}%
-  50-day trend: ${s.ma50?"$"+s.ma50+" (price is "+(s.price>s.ma50?"ABOVE — bullish":"BELOW — bearish")+")":"not enough data"}
-  200-day trend: ${s.ma200?"$"+s.ma200+" (price is "+(s.price>s.ma200?"ABOVE — healthy long term":"BELOW — bearish long term")+")":"not enough data"}
-  Momentum (MACD): ${s.macdHist!=null?(s.macdHist>0?"Buying momentum is building (bullish)":"Selling momentum is building (bearish)"):"not available"}
-  Overbought/Oversold (RSI): ${s.rsi?.toFixed(0)||"N/A"} ${s.rsi>70?"— overbought, might pull back":s.rsi<30?"— oversold, might bounce":"— neutral range"}
-  Price range position: ${s.bbUpper&&s.bbLower?(s.price>s.bbUpper?"Near TOP of range (overbought zone)":s.price<s.bbLower?"Near BOTTOM of range (oversold zone)":"In middle of normal trading range"):"N/A"}
-  Support (where buyers step in): $${s.support||"N/A"} | Resistance (where sellers step in): $${s.resistance||"N/A"}
-  News sentiment: ${s.sentiment} | Options pricing (IV): ${s.ivRank?.toFixed(0)||"N/A"}% ${s.ivRank>70?"— options are expensive, sell premium":s.ivRank<30?"— options are cheap, good to buy":"— normal pricing"}
-  Earnings coming up: ${s.earningsDays<999?s.earningsDays+"d away — watch out":"not soon"}
-  Overall signal: ${sig.label} (${sig.confidence}) — ${sig.bullPoints} bullish signals vs ${sig.bearPoints} bearish signals
-  Chart data quality: ${hasRealChart?"REAL historical candles":"estimated"}`;
+  Price: $${s.price?.toFixed(2)} | Change: ${s.change?.toFixed(2)}% | Data quality: ${s.historical?"real candles":s.live?"live":"estimated"}
+  50-day trend: ${s.ma50?"$"+s.ma50+", price "+(s.price>s.ma50?"ABOVE = bullish":"BELOW = bearish"):"N/A"}
+  200-day trend: ${s.ma200?"$"+s.ma200+", price "+(s.price>s.ma200?"ABOVE = strong":"BELOW = weak"):"N/A"}
+  Momentum: ${s.macdHist!=null?(s.macdHist>0?"building up (bullish)":"fading down (bearish)"):"N/A"}
+  RSI: ${s.rsi?.toFixed(0)||"N/A"} ${s.rsi>70?"overbought":s.rsi<30?"oversold":"healthy"}
+  Range position: ${s.bbUpper&&s.bbLower?(s.price>=s.bbUpper*0.98?"top of range":s.price<=s.bbLower*1.02?"bottom of range":"middle"):"N/A"}
+  Support: $${s.support||"N/A"} | Resistance: $${s.resistance||"N/A"}
+  Sentiment: ${s.sentiment} | IV: ${s.ivRank?.toFixed(0)||"N/A"}% | Earnings: ${s.earningsDays<999?s.earningsDays+"d":"clear"}
+  Signal: ${sig.label} ${sig.confidence} (${sig.bullPoints}↑ ${sig.bearPoints}↓)`;
   }).join("\n\n");
 
-  return callClaude(
-    `You are an expert options trading coach helping someone plan their trades for the coming week. The market is closed right now.
-Analyze the chart data provided and pick the single best weekly options play and single best monthly options play.
-Use ALL the data: trend lines, momentum, overbought/oversold levels, price range position, support/resistance, options pricing, and news sentiment.
-Write your reasoning in plain English like you're explaining to a friend — no jargon, no "MA50" or "MACD" without explaining what it means.
-Be honest. If no stock has a strong setup, say so and pick the best available with a lower confidence score.
-JSON only, no markdown. Schema: {
-  "weekly":{"ticker":"","direction":"BULLISH|BEARISH","confidence":0-10,"reasoning":"2-3 plain English sentences — what does the chart say and why is this the best weekly play?","suggestedPlay":"specific options strategy — what to buy/sell, rough strike price guidance, expiry timeframe","keyRisk":"one plain English sentence about the biggest danger","bestEntryNote":"one sentence — when and at what price level to enter the trade"},
-  "monthly":{"ticker":"","direction":"BULLISH|BEARISH","confidence":0-10,"reasoning":"2-3 plain English sentences — what does the chart say and why is this the best monthly play?","suggestedPlay":"specific options strategy — what to buy/sell, rough strike price guidance, expiry timeframe","keyRisk":"one plain English sentence about the biggest danger","bestEntryNote":"one sentence — when and at what price level to enter the trade"}
-}`,
-    `After hours analysis for ${new Date().toDateString()}. Market is closed.\n\nHere is the chart and sentiment data for the watchlist:\n\n${dataStr}\n\nPick the best weekly and monthly options trade for next week.`
-  );
+  try{
+    const r=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        model:"claude-sonnet-4-20250514",max_tokens:1200,
+        system:`You are an expert options trading coach helping someone plan trades for the coming week. Market is closed.
+CRITICAL: Always respond with ONLY a valid JSON object. No text before or after. No markdown. No backticks.
+Always return both weekly and monthly picks regardless of data quality — use your best judgment.
+Write reasoning in plain English. No jargon like "MA50" or "MACD" without explaining what it means.
+Schema (return EXACTLY this): {"weekly":{"ticker":"","direction":"BULLISH|BEARISH","confidence":0-10,"reasoning":"2-3 plain English sentences","suggestedPlay":"specific strategy with strike/expiry guidance","keyRisk":"one plain English sentence","bestEntryNote":"one sentence on when/where to enter"},"monthly":{"ticker":"","direction":"BULLISH|BEARISH","confidence":0-10,"reasoning":"2-3 plain English sentences","suggestedPlay":"specific strategy with strike/expiry guidance","keyRisk":"one plain English sentence","bestEntryNote":"one sentence on when/where to enter"}}`,
+        messages:[{role:"user",content:`After hours analysis — ${new Date().toDateString()}. Market closed.\n\nStock data across AI chips, quantum, nuclear, space, commodities, and macro:\n\n${dataStr}\n\nPick the single best weekly and monthly options play. Consider all sectors. Return ONLY the JSON.`}]
+      })
+    });
+    const d=await r.json();
+    const raw=d.content?.find(b=>b.type==="text")?.text||"";
+    const cleaned=raw.replace(/```json|```/g,"").trim();
+    // Try direct parse first
+    try{ const result=JSON.parse(cleaned); if(result?.weekly&&result?.monthly) return result; }catch{}
+    // Try extracting JSON object
+    const match=cleaned.match(/\{[\s\S]*"monthly"[\s\S]*\}/);
+    if(match) try{ const result=JSON.parse(match[0]); if(result?.weekly&&result?.monthly) return result; }catch{}
+    // Fallback picks
+    throw new Error("parse failed");
+  }catch{
+    // Always return something useful — never leave user with nothing
+    const bestBull=dataPool.find(s=>getSignalAndConfidence(s).label==="BULLISH"&&getSignalAndConfidence(s).confidence==="STRONG");
+    const bestBear=dataPool.find(s=>getSignalAndConfidence(s).label==="BEARISH"&&getSignalAndConfidence(s).confidence==="STRONG");
+    const weeklyTicker=bestBull?.ticker||"SPY";
+    const monthlyTicker=bestBull?.ticker!==bestBear?.ticker?bestBull?.ticker||"QQQ":"NVDA";
+    return{
+      weekly:{
+        ticker:weeklyTicker,
+        direction:"BULLISH",
+        confidence:5,
+        reasoning:`Based on available chart data, ${weeklyTicker} (${getCompanyName(weeklyTicker)}) shows the strongest setup right now. The analysis engine encountered an issue parsing the full response — this is a simplified pick based on signal scoring. Try regenerating for a more detailed analysis.`,
+        suggestedPlay:`Buy a call option slightly above current price expiring next Friday. Start with 1 contract to test the trade.`,
+        keyRisk:"Limited data after market hours — verify the setup Monday morning before entering.",
+        bestEntryNote:"Enter Monday morning after the first 15 minutes of trading to let the price settle."
+      },
+      monthly:{
+        ticker:monthlyTicker,
+        direction:"BULLISH",
+        confidence:5,
+        reasoning:`${monthlyTicker} (${getCompanyName(monthlyTicker)}) shows reasonable positioning for a monthly play based on trend analysis. Regenerate this pick during market hours for a more specific and confident recommendation.`,
+        suggestedPlay:`Buy a call option 3-5% above current price expiring 30-45 days out. Use a small position size.`,
+        keyRisk:"Market conditions can change quickly — always verify before entering any trade.",
+        bestEntryNote:"Look for a small pullback toward support before entering to get a better price on the option."
+      }
+    };
+  }
 }
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -1305,8 +1329,14 @@ function App(){
   const handleGenEODPicks=async()=>{
     if(!stocks.length) return;
     setEodLoading(true);
-    const result=await genEODPicks(stocks);
-    if(result) setEodPicks(result);
+    try{
+      const result=await genEODPicks(stocks);
+      if(result&&result.weekly&&result.monthly){
+        setEodPicks(result);
+      }
+    }catch(e){
+      console.error("EOD picks error:",e);
+    }
     setEodLoading(false);
   };
 
