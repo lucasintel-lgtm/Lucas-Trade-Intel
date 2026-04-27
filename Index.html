@@ -307,89 +307,76 @@ function calcBB(closes,p=20){
 }
 function getDateStr(n){const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().split("T")[0];}
 
-// ── Core scoring engine ───────────────────────────────────────────────────────
+// ── Stock Score ───────────────────────────────────────────────────────────────
+// Answers: "Does this stock look interesting right now?"
+// Inputs: chart data + market signals. NO options data needed. Lenient on TRADE.
 function scoreStock(d,spySignal,qqqSignal){
-  // Returns a 0-100 options trade score with direction and recommendation
   let score=0;
   const reasons=[];
   const warnings=[];
   let direction="NEUTRAL";
   let bullPoints=0,bearPoints=0;
 
-  // 1. TREND STRENGTH (25 pts) — price vs EMA20 and EMA50
+  // 1. TREND STRENGTH (30 pts) — price vs EMA20 and EMA50
   const ema20=d.ema20,ema50=d.ema50;
   if(ema20&&ema50&&d.price){
-    if(d.price>ema20&&d.price>ema50&&ema20>ema50){bullPoints+=3;score+=25;reasons.push("Price above both trend lines — strong uptrend");}
-    else if(d.price>ema20&&d.price>ema50){bullPoints+=2;score+=18;reasons.push("Price above both trend lines");}
-    else if(d.price>ema20&&d.price<ema50){bullPoints+=1;bearPoints+=1;score+=10;reasons.push("Short-term uptrend but below long-term average");}
-    else if(d.price<ema20&&d.price<ema50&&ema20<ema50){bearPoints+=3;score+=25;reasons.push("Price below both trend lines — strong downtrend");}
-    else if(d.price<ema20&&d.price<ema50){bearPoints+=2;score+=18;reasons.push("Price below both trend lines");}
-    else{score+=8;}
+    if(d.price>ema20&&d.price>ema50&&ema20>ema50){bullPoints+=3;score+=30;reasons.push("Price above both trend lines — strong uptrend");}
+    else if(d.price>ema20&&d.price>ema50){bullPoints+=2;score+=22;reasons.push("Price above both trend lines");}
+    else if(d.price>ema20&&d.price<ema50){bullPoints+=1;bearPoints+=1;score+=12;reasons.push("Short-term uptrend but below long-term average");}
+    else if(d.price<ema20&&d.price<ema50&&ema20<ema50){bearPoints+=3;score+=30;reasons.push("Price below both trend lines — strong downtrend");}
+    else if(d.price<ema20&&d.price<ema50){bearPoints+=2;score+=22;reasons.push("Price below both trend lines");}
+    else{score+=10;}
   }
 
-  // 2. MOMENTUM (20 pts) — MACD and daily change
+  // 2. MOMENTUM (25 pts) — MACD direction
   if(d.macdHist!=null){
-    if(d.macdHist>0){bullPoints+=2;score+=15;reasons.push("Momentum is building upward");}
-    else{bearPoints+=2;score+=15;reasons.push("Momentum is fading downward");}
+    if(d.macdHist>0){bullPoints+=2;score+=22;reasons.push("Momentum is building upward");}
+    else{bearPoints+=2;score+=22;reasons.push("Momentum is fading downward");}
   }
-  // Penalize huge same-day moves (chasing risk)
+
+  // 3. SAME-DAY MOVE (±10) — chasing risk
   const absChange=Math.abs(d.change||0);
   if(absChange>8){score-=10;warnings.push(`Already moved ${d.change?.toFixed(1)}% today — avoid chasing this move`);}
-  else if(absChange>5){score-=5;warnings.push(`Large move today (${d.change?.toFixed(1)}%) — wait for consolidation before entering`);}
+  else if(absChange>5){score-=5;warnings.push(`Big move today (${d.change?.toFixed(1)}%) — wait for consolidation before entering`);}
   else if(absChange<3&&absChange>0){score+=5;}
 
-  // 3. RSI — overextension (15 pts)
+  // 4. RSI (20 pts) — overextension check
   const rsi=d.rsi||50;
   if(bullPoints>=bearPoints){
-    // Bullish bias — ideal RSI 45-65
-    if(rsi>=45&&rsi<=65){score+=15;reasons.push("RSI in ideal zone for bullish entry (not overbought)");}
-    else if(rsi>65&&rsi<=70){score+=8;warnings.push("RSI getting high — stock may be slightly stretched");}
-    else if(rsi>70){score+=0;warnings.push("RSI above 70 — overbought, avoid chasing, wait for pullback");}
-    else if(rsi<45&&rsi>=35){score+=10;reasons.push("RSI pulling back — could be a good dip entry");}
-    else{score+=5;warnings.push("RSI very low — may be oversold, confirm before going bullish");}
+    if(rsi>=45&&rsi<=65){score+=20;reasons.push("RSI in ideal zone for bullish entry (not overbought)");}
+    else if(rsi>65&&rsi<=70){score+=12;warnings.push("RSI getting high — stock may be slightly stretched");}
+    else if(rsi>70){score+=2;warnings.push("RSI above 70 — overbought, wait for pullback");}
+    else if(rsi<45&&rsi>=35){score+=14;reasons.push("RSI pulling back — could be a good dip entry");}
+    else{score+=6;warnings.push("RSI very low — confirm before going bullish");}
   } else {
-    // Bearish bias — ideal RSI 35-55
-    if(rsi>=35&&rsi<=55){score+=15;reasons.push("RSI in ideal zone for bearish entry (not oversold)");}
-    else if(rsi<35&&rsi>=30){score+=8;warnings.push("RSI getting low — stock may be slightly oversold");}
-    else if(rsi<30){score+=0;warnings.push("RSI below 30 — oversold, avoid chasing down, wait for bounce");}
-    else if(rsi>55&&rsi<=65){score+=10;reasons.push("RSI elevated — may be rolling over, good for bearish plays");}
-    else{score+=5;}
+    if(rsi>=35&&rsi<=55){score+=20;reasons.push("RSI in ideal zone for bearish entry (not oversold)");}
+    else if(rsi<35&&rsi>=30){score+=12;warnings.push("RSI getting low — stock may be slightly oversold");}
+    else if(rsi<30){score+=2;warnings.push("RSI below 30 — oversold, wait for bounce");}
+    else if(rsi>55&&rsi<=65){score+=14;reasons.push("RSI elevated — may be rolling over, good for bearish plays");}
+    else{score+=6;}
   }
 
-  // 4. IV RANK — options pricing (15 pts)
-  const iv=d.ivRank||50;
-  if(iv<30){score+=15;reasons.push("Options are cheap right now — good time to buy a spread");}
-  else if(iv<50){score+=12;reasons.push("Options pricing is normal — debit spreads are fairly priced");}
-  else if(iv<70){score+=6;warnings.push(`IV rank at ${iv.toFixed(0)}% — options getting expensive, use spreads not naked options`);}
-  else{score+=0;warnings.push(`IV rank at ${iv.toFixed(0)}% — options very expensive, debit spreads lose value quickly, consider waiting`);}
-
-  // 5. MARKET CONFIRMATION (10 pts) — market should influence, not dominate
+  // 5. MARKET SUPPORT (15 pts) — market influences but never dominates
   const bullBias=bullPoints>bearPoints;
   const bearBias=bearPoints>bullPoints;
   const marketMixed=(spySignal==="neutral"||qqqSignal==="neutral"||spySignal!==qqqSignal);
-  if(bullBias&&spySignal==="bull"&&qqqSignal==="bull"){score+=10;reasons.push("Market (SPY + QQQ) confirms bullish direction");}
-  else if(bearBias&&spySignal==="bear"&&qqqSignal==="bear"){score+=10;reasons.push("Market (SPY + QQQ) confirms bearish direction");}
-  else if(bullBias&&(spySignal==="bull"||qqqSignal==="bull")){score+=7;reasons.push("Market partially supports bullish direction");}
-  else if(bearBias&&(spySignal==="bear"||qqqSignal==="bear")){score+=7;reasons.push("Market partially supports bearish direction");}
-  else if(marketMixed){score+=5;reasons.push("Market is mixed — neutral influence");}
-  else{score+=3;warnings.push("Market direction disagrees with this setup — lower confidence");}
+  if(bullBias&&spySignal==="bull"&&qqqSignal==="bull"){score+=15;reasons.push("Market (SPY + QQQ) confirms bullish direction");}
+  else if(bearBias&&spySignal==="bear"&&qqqSignal==="bear"){score+=15;reasons.push("Market (SPY + QQQ) confirms bearish direction");}
+  else if(bullBias&&(spySignal==="bull"||qqqSignal==="bull")){score+=11;reasons.push("Market partially supports bullish direction");}
+  else if(bearBias&&(spySignal==="bear"||qqqSignal==="bear")){score+=11;reasons.push("Market partially supports bearish direction");}
+  else if(marketMixed){score+=8;reasons.push("Market is mixed — moderate support, watch closely");}
+  else{score+=5;warnings.push("Market direction disagrees with this setup — lower confidence");}
 
-  // 6. EARNINGS RISK — auto skip
-  const earnDays=d.earningsDays||999;
-  if(earnDays<7){warnings.push(`⚠ EARNINGS IN ${earnDays} DAYS — extremely high risk, avoid unless this is an earnings play`);score-=20;}
-  else if(earnDays<21){warnings.push(`Earnings in ${earnDays} days — use shorter expiration or wait until after earnings`);}
-  else if(earnDays<45){warnings.push(`Earnings in ${earnDays} days — factor this into expiration choice`);}
-
-  // 7. SUPPORT/RESISTANCE context
+  // 6. SUPPORT/RESISTANCE adjustment (±5)
   if(d.support&&d.resistance&&d.price){
     const distFromSupport=((d.price-d.support)/d.price)*100;
     const distFromResistance=((d.resistance-d.price)/d.price)*100;
     if(bullPoints>=bearPoints){
       if(distFromSupport<3){score+=5;reasons.push("Price near support — good risk/reward for bullish entry");}
-      if(distFromResistance<3){score-=5;warnings.push("Price near resistance — limited upside room, not ideal for calls");}
+      if(distFromResistance<3){score-=5;warnings.push("Price near resistance — limited upside room");}
     } else {
       if(distFromResistance<3){score+=5;reasons.push("Price near resistance — good risk/reward for bearish entry");}
-      if(distFromSupport<3){score-=5;warnings.push("Price near support — limited downside room, not ideal for puts");}
+      if(distFromSupport<3){score-=5;warnings.push("Price near support — limited downside room");}
     }
   }
 
@@ -398,44 +385,41 @@ function scoreStock(d,spySignal,qqqSignal){
   else if(bearPoints>bullPoints+1) direction="BEARISH";
   else direction="NEUTRAL";
 
-  // Final score cap
-  score=Math.min(100,Math.max(0,Math.round(score)));
+  // Cap stock score
+  const stockScore=Math.min(100,Math.max(0,Math.round(score)));
 
-  // Decision logic
-  // Critical indicator data missing — should land in WAIT, never SKIP
+  // Scan-time decision (stock-side only — trade quality re-evaluated in detail view)
+  const earnDays=d.earningsDays||999;
   const dataMissing=(d.ema20==null||d.ema50==null||d.macdHist==null);
-  // Market confirms direction (at least one of SPY/QQQ matches the bias)
-  const marketConfirms=(direction==="BULLISH"&&(spySignal==="bull"||qqqSignal==="bull"))||
-                       (direction==="BEARISH"&&(spySignal==="bear"||qqqSignal==="bear"));
   let decision,strategy,expiration,confidence;
+
   // HARD SKIP — earnings risk only
   if(earnDays<7){
     decision="SKIP";strategy="No Trade — Earnings Risk";expiration="N/A";confidence="Low";
   }
-  // DATA CHECK — incomplete indicator data, parked in WAIT for the user to verify
+  // DATA CHECK — incomplete chart data
   else if(dataMissing){
     decision="WAIT";strategy="DATA CHECK REQUIRED";expiration="21–45 DTE";confidence="Low";
     warnings.push("I can see the live price, but I need more chart data before I can rate this one.");
   }
-  // TRADE — high score AND clear direction AND market confirms direction
-  else if(score>=70&&direction!=="NEUTRAL"&&marketConfirms){
+  // TRADE CANDIDATE — stock score 70+ with clear direction (lenient on idea finding)
+  else if(stockScore>=70&&direction!=="NEUTRAL"){
     decision="TRADE";
     strategy=direction==="BULLISH"?"Call Debit Spread":"Put Debit Spread";
-    expiration=absChange>5?"21–45 DTE":score>=85?"7–14 DTE":"21–45 DTE";
-    confidence=score>=85?"High":"Medium";
+    expiration=absChange>5?"21–45 DTE":stockScore>=85?"7–14 DTE":"21–45 DTE";
+    confidence=stockScore>=85?"High":"Medium";
   }
-  // WAIT — score 40+ but missing one TRADE requirement (direction, market, etc.)
-  else if(score>=40){
+  // WAIT — interesting (55+) but not top tier or unclear direction
+  else if(stockScore>=55){
     decision="WAIT";
     if(direction==="NEUTRAL") strategy="Direction unclear — watch for confirmation";
-    else if(score>=70&&!marketConfirms) strategy=direction==="BULLISH"?"Call Debit Spread (market not confirming)":"Put Debit Spread (market not confirming)";
-    else strategy=direction==="BULLISH"?"Call Debit Spread (wait for entry)":"Put Debit Spread (wait for entry)";
+    else strategy=direction==="BULLISH"?"Call Debit Spread (watch list)":"Put Debit Spread (watch list)";
     expiration="21–45 DTE";
     confidence="Low";
   }
-  // SKIP — weak setup, score below 40
+  // SKIP — stock score below 55
   else {
-    decision="SKIP";strategy="No Trade — Weak Setup";expiration="N/A";confidence="Low";
+    decision="SKIP";strategy="No Trade — Weak Stock Score";expiration="N/A";confidence="Low";
   }
 
   // Override to WAIT if too extended (don't chase)
@@ -453,7 +437,127 @@ function scoreStock(d,spySignal,qqqSignal){
   else if(decision==="TRADE"&&direction==="BEARISH") section="monthlyPut";
   else if(decision==="WAIT") section="wait";
 
-  return{score,direction,decision,strategy,expiration,confidence,reasons,warnings,section,bullPoints,bearPoints,earnDays};
+  return{score:stockScore,stockScore,direction,decision,strategy,expiration,confidence,reasons,warnings,section,bullPoints,bearPoints,earnDays,dataMissing,marketMixed};
+}
+
+// ── Trade Score ───────────────────────────────────────────────────────────────
+// Answers: "Is this actual option trade worth doing?"
+// Inputs: spread + stock data. STRICT on real-trade quality.
+function calcTradeScore(spread,stockData){
+  if(!spread){
+    return{score:0,reasons:[],warnings:[],hardFails:["Option data missing"]};
+  }
+  let score=0;
+  const reasons=[];
+  const warnings=[];
+  const hardFails=[];
+
+  // 1. OPEN INTEREST (20 pts)
+  const minOI=Math.min(spread.longOI||0,spread.shortOI||0);
+  if(minOI>=500){score+=20;reasons.push("High open interest — easy to enter and exit");}
+  else if(minOI>=200){score+=15;reasons.push("Decent open interest");}
+  else if(minOI>=100){score+=10;warnings.push("Open interest moderate — check liquidity at order time");}
+  else if(minOI>=50){score+=5;warnings.push("Open interest low — fills may be slow");}
+  else{hardFails.push("Open interest too low — risky to enter and exit");}
+
+  // 2. BID/ASK SPREAD (20 pts)
+  const longSpread=(spread.longAsk||0)-(spread.longBid||0);
+  const shortSpread=(spread.shortAsk||0)-(spread.shortBid||0);
+  const widestSpread=Math.max(longSpread,shortSpread);
+  if(widestSpread<=0.10){score+=20;reasons.push("Tight bid/ask spread — fair pricing");}
+  else if(widestSpread<=0.25){score+=15;reasons.push("Reasonable bid/ask spread");}
+  else if(widestSpread<=0.50){score+=8;warnings.push("Bid/ask spread is wide — you'll pay extra to enter");}
+  else{hardFails.push("Bid/ask spread too wide — execution risk");}
+
+  // 3. RISK / REWARD (25 pts)
+  const rr=spread.riskReward||0;
+  if(rr>=2.0){score+=25;reasons.push(`Excellent reward vs risk (${rr.toFixed(2)}:1)`);}
+  else if(rr>=1.5){score+=20;reasons.push(`Good reward vs risk (${rr.toFixed(2)}:1)`);}
+  else if(rr>=1.0){score+=12;reasons.push(`Acceptable reward vs risk (${rr.toFixed(2)}:1)`);}
+  else if(rr>=0.7){score+=5;warnings.push(`Reward below 1:1 risk (${rr.toFixed(2)}:1) — small payoff for the risk`);}
+  else{hardFails.push(`Reward too small compared to risk (${rr.toFixed(2)}:1)`);}
+
+  // 4. SPREAD COST (15 pts) — debit relative to width
+  const debitRatio=spread.debit&&spread.spreadWidth?spread.debit/spread.spreadWidth:1;
+  if(debitRatio<=0.40){score+=15;reasons.push("Spread cost is reasonable");}
+  else if(debitRatio<=0.55){score+=10;reasons.push("Spread cost is acceptable");}
+  else if(debitRatio<=0.70){score+=4;warnings.push(`Spread is expensive (${(debitRatio*100).toFixed(0)}% of width)`);}
+  else{hardFails.push("Spread too expensive vs maximum gain");}
+
+  // 5. EXPIRATION QUALITY (10 pts) — theta as proxy for healthy expiration
+  if(spread.theta!=null){
+    const dailyDecay=Math.abs(parseFloat(spread.theta));
+    if(dailyDecay<0.05){score+=10;reasons.push("Time decay is mild");}
+    else if(dailyDecay<0.15){score+=6;reasons.push("Time decay is moderate");}
+    else{score+=2;warnings.push(`Time decay is high (${dailyDecay.toFixed(2)}/day)`);}
+  } else {
+    score+=5;
+  }
+
+  // 6. EARNINGS RISK (10 pts)
+  const earnDays=stockData?.earningsDays||999;
+  if(earnDays>=30){score+=10;reasons.push("No earnings risk in the window");}
+  else if(earnDays>=14){score+=5;warnings.push(`Earnings in ${earnDays} days — factor into expiration choice`);}
+  else if(earnDays>=7){warnings.push(`Earnings in ${earnDays} days — short window, risk is elevated`);}
+  else{hardFails.push(`Earnings in ${earnDays} days — too close, avoid`);}
+
+  // Cap
+  score=Math.min(100,Math.max(0,Math.round(score)));
+
+  return{score,reasons,warnings,hardFails};
+}
+
+// ── Final Decision ────────────────────────────────────────────────────────────
+// Combines stock + trade score into the final TRADE/WAIT/SKIP call.
+// TRADE requires BOTH 70+ and zero hard fails.
+// WAIT covers stock 55+ with weak trade quality OR mixed market.
+// SKIP for either score below 55 or any hard fail.
+function makeFinalDecision(stockScoreData,tradeScoreData){
+  const stockScore=stockScoreData.stockScore||stockScoreData.score||0;
+  const tradeScore=tradeScoreData?.score||0;
+  const hardFails=tradeScoreData?.hardFails||[];
+  const marketMixed=stockScoreData.marketMixed;
+
+  // Hard fails → SKIP
+  if(hardFails.length>0){
+    return{decision:"SKIP",reason:hardFails[0],hardFails};
+  }
+  // TRADE — both scores strong, no fails
+  if(stockScore>=70&&tradeScore>=70){
+    return{decision:"TRADE",reason:"Stock looks good and the actual option trade is clean"};
+  }
+  // WAIT — stock interesting but trade not strong, or market mixed
+  if(stockScore>=55){
+    if(tradeScore<70&&tradeScore>=55){
+      return{decision:"WAIT",reason:`Stock looks interesting but the actual option trade isn't strong enough yet (trade score ${tradeScore})`};
+    }
+    if(marketMixed){
+      return{decision:"WAIT",reason:"Market is mixed — wait for clearer direction before placing this trade"};
+    }
+    if(tradeScore<55){
+      return{decision:"SKIP",reason:`Trade quality too low (trade score ${tradeScore})`};
+    }
+  }
+  // SKIP — weak stock
+  if(stockScore<55){
+    return{decision:"SKIP",reason:`Stock score too low (${stockScore})`};
+  }
+  return{decision:"WAIT",reason:"Watching"};
+}
+
+// Confidence display — never HIGH if liquidity is bad or reward is weak
+function combinedConfidence(stockScoreData,tradeScoreData){
+  const stockScore=stockScoreData.stockScore||stockScoreData.score||0;
+  const tradeScore=tradeScoreData?.score||0;
+  const hardFails=tradeScoreData?.hardFails||[];
+  // Any hard fail kills confidence
+  if(hardFails.length>0) return "Low";
+  // No trade data yet — fall back to stock-only confidence
+  if(!tradeScoreData) return stockScoreData.confidence||"Low";
+  // Both must be strong for High
+  if(stockScore>=85&&tradeScore>=80) return "High";
+  if(stockScore>=70&&tradeScore>=70) return "Medium";
+  return "Low";
 }
 
 // ── Market signal helper ──────────────────────────────────────────────────────
@@ -960,7 +1064,6 @@ function StockDetail({stock,scoreData,onClose,onLogTrade}){
   const [readLoading,setReadLoading]=useState(false);
   const [optionsData,setOptionsData]=useState(null);
   const [optionsLoading,setOptionsLoading]=useState(false);
-  const dc=decisionColor(scoreData.decision);
 
   // Load real options data from Tradier when detail opens
   useEffect(()=>{
@@ -979,6 +1082,15 @@ function StockDetail({stock,scoreData,onClose,onLogTrade}){
       :(scoreData.expiration.includes("7")?optionsData.weeklyPutSpread:optionsData.monthlyPutSpread)
   ):null;
   const estimatedSpread=getSpreadGuidance(stock,scoreData);
+
+  // Compute trade score from real spread (or null if no data) and final combined decision
+  const tradeScoreData=realSpread?calcTradeScore(realSpread,stock):null;
+  const finalDecision=tradeScoreData?makeFinalDecision(scoreData,tradeScoreData):null;
+  const displayDecision=finalDecision?finalDecision.decision:scoreData.decision;
+  const displayConfidence=combinedConfidence(scoreData,tradeScoreData);
+  const dc=decisionColor(displayDecision);
+  // Was the original scan-time decision downgraded by trade quality?
+  const decisionDowngraded=finalDecision&&finalDecision.decision!==scoreData.decision;
 
   const handleRead=async()=>{
     setReadLoading(true);setRead(null);
@@ -1008,17 +1120,38 @@ function StockDetail({stock,scoreData,onClose,onLogTrade}){
       </div>
 
       <div style={{padding:16,display:"flex",flexDirection:"column",gap:12}}>
-        {/* Final Decision */}
-        <div style={{background:decisionBg(scoreData.decision),border:`1px solid ${dc}30`,borderRadius:14,padding:16}}>
+        {/* Final Decision (combined from stock + trade score) */}
+        <div style={{background:decisionBg(displayDecision),border:`1px solid ${dc}30`,borderRadius:14,padding:16}}>
           <div style={{fontSize:10,color:dc,fontFamily:"'DM Mono',monospace",letterSpacing:2,marginBottom:8}}>FINAL DECISION</div>
-          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
-            <DecisionBadge decision={scoreData.decision} size={16}/>
-            <div style={{fontSize:22,fontWeight:400,color:dc,fontFamily:"'DM Serif Display',serif"}}>{scoreData.score}/100</div>
-            <Chip label={`${scoreData.confidence} Confidence`} color={confidenceColor(scoreData.confidence)} size={11}/>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12,flexWrap:"wrap"}}>
+            <DecisionBadge decision={displayDecision} size={16}/>
+            <Chip label={`${displayConfidence} Confidence`} color={confidenceColor(displayConfidence)} size={11}/>
           </div>
+          {/* Two-score readout */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+            <div style={{background:C.bg3,borderRadius:10,padding:"8px 10px"}}>
+              <div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:3}}>STOCK SCORE</div>
+              <div style={{fontSize:18,fontWeight:600,color:scoreData.stockScore>=70?C.green:scoreData.stockScore>=55?C.amber:C.red,fontFamily:"'DM Mono',monospace"}}>{scoreData.stockScore}/100</div>
+              <div style={{fontSize:9,color:C.text3,marginTop:2}}>Is the stock interesting?</div>
+            </div>
+            <div style={{background:C.bg3,borderRadius:10,padding:"8px 10px"}}>
+              <div style={{fontSize:9,color:C.text3,fontFamily:"'DM Mono',monospace",letterSpacing:1,marginBottom:3}}>TRADE SCORE</div>
+              <div style={{fontSize:18,fontWeight:600,color:tradeScoreData?(tradeScoreData.score>=70?C.green:tradeScoreData.score>=55?C.amber:C.red):C.text3,fontFamily:"'DM Mono',monospace"}}>{tradeScoreData?`${tradeScoreData.score}/100`:"—"}</div>
+              <div style={{fontSize:9,color:C.text3,marginTop:2}}>Is the trade clean?</div>
+            </div>
+          </div>
+          {decisionDowngraded&&(
+            <div style={{background:"rgba(245,158,11,0.10)",border:`1px solid ${C.amber}30`,borderRadius:8,padding:10,marginBottom:10}}>
+              <div style={{fontSize:11,color:C.amber,fontWeight:600,marginBottom:3}}>⏳ Stock-side rated this {scoreData.decision} but trade quality changed it to {displayDecision}</div>
+              <div style={{fontSize:11,color:C.text2}}>{finalDecision.reason}</div>
+            </div>
+          )}
+          {finalDecision&&!decisionDowngraded&&displayDecision==="TRADE"&&(
+            <div style={{fontSize:11,color:C.text2,marginBottom:10}}>{finalDecision.reason}</div>
+          )}
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             <Chip label={scoreData.direction} color={scoreData.direction==="BULLISH"?C.green:scoreData.direction==="BEARISH"?C.red:C.text2} size={12}/>
-            <Chip label={scoreData.strategy.replace(" (wait for entry)","")} color={C.blue} size={11}/>
+            <Chip label={scoreData.strategy.replace(" (wait for entry)","").replace(" (watch list)","")} color={C.blue} size={11}/>
             <Chip label={scoreData.expiration} color={C.gold} size={11}/>
           </div>
         </div>
@@ -1026,15 +1159,15 @@ function StockDetail({stock,scoreData,onClose,onLogTrade}){
         {/* Data Health */}
         <DataHealthBox stock={stock} optionsLoading={optionsLoading} optionsLive={!!optionsData?.hasRealOptions}/>
 
-        {/* Score breakdown */}
+        {/* Stock Score breakdown */}
         <div style={card}>
-          <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,fontSize:11,color:C.text2,letterSpacing:2,fontFamily:"'DM Mono',monospace"}}>📊 SCORE BREAKDOWN</div>
+          <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,fontSize:11,color:C.text2,letterSpacing:2,fontFamily:"'DM Mono',monospace"}}>📊 STOCK SCORE BREAKDOWN</div>
           <div style={{padding:14,display:"flex",flexDirection:"column",gap:8}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               <div style={{flex:1,height:4,background:C.bg3,borderRadius:999,overflow:"hidden"}}>
-                <div style={{width:`${scoreData.score}%`,height:"100%",background:scoreData.score>=70?C.green:scoreData.score>=45?C.amber:C.red,borderRadius:999}}/>
+                <div style={{width:`${scoreData.stockScore}%`,height:"100%",background:scoreData.stockScore>=70?C.green:scoreData.stockScore>=55?C.amber:C.red,borderRadius:999}}/>
               </div>
-              <span style={{fontSize:13,fontWeight:600,color:scoreData.score>=70?C.green:scoreData.score>=45?C.amber:C.red,fontFamily:"'DM Mono',monospace",flexShrink:0}}>{scoreData.score}/100</span>
+              <span style={{fontSize:13,fontWeight:600,color:scoreData.stockScore>=70?C.green:scoreData.stockScore>=55?C.amber:C.red,fontFamily:"'DM Mono',monospace",flexShrink:0}}>{scoreData.stockScore}/100</span>
             </div>
             {scoreData.reasons.map((r,i)=>(
               <div key={i} style={{display:"flex",gap:8,padding:"6px 10px",background:"rgba(0,200,150,0.06)",borderRadius:8}}>
@@ -1050,6 +1183,45 @@ function StockDetail({stock,scoreData,onClose,onLogTrade}){
             ))}
           </div>
         </div>
+
+        {/* Trade Quality breakdown — only when options data is loaded */}
+        {tradeScoreData&&(
+          <div style={card}>
+            <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,fontSize:11,color:C.text2,letterSpacing:2,fontFamily:"'DM Mono',monospace"}}>📐 TRADE QUALITY BREAKDOWN</div>
+            <div style={{padding:14,display:"flex",flexDirection:"column",gap:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{flex:1,height:4,background:C.bg3,borderRadius:999,overflow:"hidden"}}>
+                  <div style={{width:`${tradeScoreData.score}%`,height:"100%",background:tradeScoreData.score>=70?C.green:tradeScoreData.score>=55?C.amber:C.red,borderRadius:999}}/>
+                </div>
+                <span style={{fontSize:13,fontWeight:600,color:tradeScoreData.score>=70?C.green:tradeScoreData.score>=55?C.amber:C.red,fontFamily:"'DM Mono',monospace",flexShrink:0}}>{tradeScoreData.score}/100</span>
+              </div>
+              {tradeScoreData.hardFails.map((h,i)=>(
+                <div key={`hf${i}`} style={{display:"flex",gap:8,padding:"8px 10px",background:"rgba(240,70,90,0.10)",border:`1px solid ${C.red}30`,borderRadius:8}}>
+                  <span style={{color:C.red,flexShrink:0,fontWeight:700}}>✗</span>
+                  <span style={{fontSize:12,color:C.text}}><strong style={{color:C.red}}>HARD FAIL:</strong> {h}</span>
+                </div>
+              ))}
+              {tradeScoreData.reasons.map((r,i)=>(
+                <div key={`r${i}`} style={{display:"flex",gap:8,padding:"6px 10px",background:"rgba(0,200,150,0.06)",borderRadius:8}}>
+                  <span style={{color:C.green,flexShrink:0}}>✓</span>
+                  <span style={{fontSize:12,color:C.text2}}>{r}</span>
+                </div>
+              ))}
+              {tradeScoreData.warnings.map((w,i)=>(
+                <div key={`w${i}`} style={{display:"flex",gap:8,padding:"6px 10px",background:"rgba(245,158,11,0.06)",borderRadius:8}}>
+                  <span style={{color:C.amber,flexShrink:0}}>⚠</span>
+                  <span style={{fontSize:12,color:C.text2}}>{w}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {!tradeScoreData&&optionsLoading&&scoreData.decision!=="SKIP"&&(
+          <div style={{...card,padding:14,textAlign:"center",color:C.amber,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+            <div style={{fontSize:18,display:"inline-block",animation:"spin 1s linear infinite",marginBottom:6}}>◌</div>
+            <div>Checking the actual option trade quality…</div>
+          </div>
+        )}
 
         {/* Real Options Chain from Tradier */}
         {scoreData.decision!=="SKIP"&&(
