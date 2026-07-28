@@ -1,0 +1,42 @@
+name: Paper Trader
+
+on:
+  schedule:
+    # Every 15 min, 13:00â€“21:00 UTC, Monâ€“Fri.
+    # Covers 9:30â€“16:00 ET in both EST and EDT; the worker itself
+    # checks Eastern time and exits quietly outside market hours.
+    - cron: "*/15 13-21 * * 1-5"
+  workflow_dispatch: {}   # lets you run it manually from the Actions tab
+
+concurrency:
+  group: paper-trader
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run paper trading worker
+        env:
+          TRADIER_API_KEY: ${{ secrets.TRADIER_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+        run: python paper_worker.py
+
+      - name: Commit updated data
+        run: |
+          git config user.name "paper-trader-bot"
+          git config user.email "actions@github.com"
+          git add data/
+          git diff --cached --quiet || git commit -m "paper data $(date -u +'%Y-%m-%d %H:%M')"
+          git pull --rebase origin main || true
+          git push
